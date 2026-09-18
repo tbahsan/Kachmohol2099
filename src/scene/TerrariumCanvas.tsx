@@ -1,5 +1,5 @@
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
-import { ContactShadows, Float, Html, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
+import { ContactShadows, Float, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { Suspense, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -91,9 +91,9 @@ function DaySky() {
   return <>
     <mesh scale={38}><sphereGeometry args={[1,48,24]} /><shaderMaterial side={THREE.BackSide} depthWrite={false} vertexShader={`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`varying vec3 vPos; void main(){float h=normalize(vPos).y*.5+.5;vec3 horizon=vec3(.64,.82,.84);vec3 zenith=vec3(.16,.48,.66);gl_FragColor=vec4(mix(horizon,zenith,smoothstep(.18,.92,h)),1.0);}`} /></mesh>
     <group position={[-5,4,-12]}><mesh><sphereGeometry args={[.72,32,32]} /><meshBasicMaterial color="#fff4b5" toneMapped={false} /></mesh><pointLight color="#ffd98c" intensity={24} distance={30} /></group>
-    <group ref={clouds} position={[-6,2.8,-10]}>
+    <group ref={clouds} position={[-6,2.1,-9]}>
       {[0,3.8,7.2,11.5].map((offset,index)=><group key={index} position={[offset,Math.sin(index*2)*.7,index%2*-2]} scale={.8+index%2*.35}>
-        {[[-.8,0,0],[-.25,.22,0],[.35,.12,0],[.8,-.05,0]].map((position,i)=><mesh key={i} position={position as [number,number,number]}><sphereGeometry args={[.62+i%2*.18,24,16]} /><meshStandardMaterial color="#f2ffff" transparent opacity={.45} roughness={1} depthWrite={false} /></mesh>)}
+        {[[-.8,0,0],[-.25,.22,0],[.35,.12,0],[.8,-.05,0]].map((position,i)=><mesh key={i} position={position as [number,number,number]}><sphereGeometry args={[.62+i%2*.18,24,16]} /><meshStandardMaterial color="#f7ffff" transparent opacity={.68} roughness={1} depthWrite={false} /></mesh>)}
       </group>)}
     </group>
   </>
@@ -145,14 +145,14 @@ function PlacementSurface({ type, onPlace }: { type: EntityType; onPlace: (posit
   </>
 }
 
-function World({ pendingType, onPlace, advanced }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean }) {
+function World({ pendingType, onPlace, advanced, relax }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean }) {
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
   const isDay = env.mode === 'day'
   return <>
     <color attach="background" args={[isDay ? '#6f98a1' : '#01040b']} />
-    <fog attach="fog" args={[isDay ? '#84a9a5' : '#030713', 9, 24]} />
+    <fog attach="fog" args={[isDay ? '#5d9bb2' : '#030713', isDay ? 28 : 14, isDay ? 70 : 44]} />
     <ambientLight intensity={isDay ? 1.4 : .32} />
     <hemisphereLight intensity={isDay ? 2.1 : .55} color={isDay?'#fff4d5':'#7ccfff'} groundColor={isDay?'#325843':'#061323'} />
     <directionalLight castShadow position={[4, 7, 5]} intensity={isDay ? 3.8 : .5} color={isDay ? '#fff0c2' : '#8cc8ff'} shadow-mapSize={[1024,1024]} />
@@ -167,13 +167,13 @@ function World({ pendingType, onPlace, advanced }: { pendingType: EntityType | n
       {pendingType && <PlacementSurface type={pendingType} onPlace={onPlace} />}
       {entities.map(entity => env.float && entity.type === 'core' ? <Float key={entity.id} speed={1.05} rotationIntensity={.05} floatIntensity={.18}><Artifact entity={entity} advanced={advanced} /></Float> : <Artifact key={entity.id} entity={entity} advanced={advanced} />)}
     </group>
-    <OrbitControls makeDefault enableDamping dampingFactor={.055} minDistance={5.6} maxDistance={10} maxPolarAngle={Math.PI*.78} minPolarAngle={Math.PI*.16} />
+    <OrbitControls makeDefault enableDamping dampingFactor={.055} minDistance={5.8} maxDistance={9.2} maxPolarAngle={Math.PI*.49} minPolarAngle={Math.PI*.2} autoRotate={relax} autoRotateSpeed={.38} enablePan={false} />
     <EffectComposer multisampling={0}><Bloom mipmapBlur intensity={isDay?.45:1.25} luminanceThreshold={isDay?.92:.48} radius={.72} /><Vignette eskil={false} offset={.18} darkness={isDay?.35:.66} /></EffectComposer>
   </>
 }
 
-export function TerrariumCanvas({ pendingType, onPlace, advanced }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean }) {
+export function TerrariumCanvas({ pendingType, onPlace, advanced, relax }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} /></Suspense>
   </Canvas>
 }

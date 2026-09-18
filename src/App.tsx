@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Box, Camera, ChevronRight, Copy, Download, FolderOpen, Home, Languages, LayoutDashboard, LockKeyhole, Moon, Move3D, Plus, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { Box, Camera, ChevronRight, Copy, Download, FolderOpen, Home, Languages, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Plus, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
@@ -18,6 +18,7 @@ function App() {
   const [welcome, setWelcome] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
   const [advanced, setAdvanced] = useState(false)
+  const [relaxMode, setRelaxMode] = useState(false)
   const [pendingType, setPendingType] = useState<EntityType | null>(null)
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
@@ -67,14 +68,24 @@ function App() {
   }
   const closeWelcome = () => { sessionStorage.setItem('kachmohol-entered', '1'); setWelcome(false) }
   const beginProject = (template: 'empty' | 'garden' | 'abyss') => { store.newProject(template); setHomeOpen(false); setPendingType(null); setInspectorOpen(false); if (template === 'empty') setWelcome(true) }
+  const addSmart = (type: EntityType) => {
+    const index = store.entities.length
+    const angle = index * 2.35 + .6
+    const radius = .75 + (index % 3) * .38
+    const position: [number, number, number] = [Math.cos(angle) * radius, type === 'core' ? -.55 : -1.58, Math.sin(angle) * radius]
+    store.addEntity(type, position); setCatalogOpen(false); setNotice(store.language === 'bn' ? 'অবজেক্ট যোগ হয়েছে—ধরে টেনে সরান' : 'Object added — drag it to move')
+  }
+  const enterRelax = () => { setRelaxMode(true); document.documentElement.requestFullscreen?.().catch(() => undefined) }
+  const exitRelax = () => { setRelaxMode(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined) }
 
-  return <main className="app-shell">
+  return <main className={`app-shell ${relaxMode ? 'relax-mode' : ''}`}>
     <header className="topbar">
       <div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><div><strong>{primaryName}</strong><small>{alternateName} · {t.subtitle}</small></div></div>
       <div className="top-actions">
         <IconButton title="Creative Home" onClick={() => setHomeOpen(true)}><Home /></IconButton>
         <button className={`mode-button ${advanced ? 'active' : ''}`} onClick={() => setAdvanced(v => !v)}><LayoutDashboard />{advanced ? (store.language === 'bn' ? 'সহজ মোড' : 'Guided mode') : (store.language === 'bn' ? 'অ্যাডভান্সড' : 'Advanced')}</button>
         <span className={`save-state ${store.saveState}`}>{store.saveState === 'saved' ? t.saved : t.saving}</span>
+        <button className="relax-button" onClick={enterRelax}><Maximize2 />{store.language === 'bn' ? 'রিল্যাক্স' : 'Relax'}</button>
         <div className="tool-pair"><IconButton title="Undo" onClick={store.undo} disabled={!store.past.length}><Undo2 /></IconButton><IconButton title="Redo" onClick={store.redo} disabled={!store.future.length}><Redo2 /></IconButton></div>
         <IconButton title={t.photo} onClick={takePhoto}><Camera /></IconButton>
         <button className="text-button" onClick={exportProject}><Download /> {t.export}</button>
@@ -89,7 +100,7 @@ function App() {
         <button className="catalog-close" onClick={() => setCatalogOpen(false)} aria-label="Close catalog"><X /></button>
         <PanelTitle icon={<Box />} text={t.objects} />
         <div className="catalog">
-          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className={`catalog-card ${pendingType === type ? 'active' : ''}`} onClick={() => { setPendingType(type); setCatalogOpen(false); store.select(null); setInspectorOpen(false) }}>
+          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className={`catalog-card ${pendingType === type ? 'active' : ''}`} onClick={() => { addSmart(type); setInspectorOpen(false) }}>
             <span className={`artifact-preview p${i}`}><Sparkles /></span><span><b>{t[type]}</b><small>+ ADD TO DOME</small></span><ChevronRight />
           </button>)}
           <div className="locked-card"><LockKeyhole /><span>{t.locked}</span><b>06</b></div>
@@ -98,7 +109,7 @@ function App() {
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={e.id === store.selectedId ? 'selected' : ''} onClick={() => store.select(e.id)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
       </aside>
 
-      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
+      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} relax={relaxMode} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
         {!advanced && !pendingType && <div className="guided-create-tray">
           <button className="add-object-button" onClick={() => setCatalogOpen(true)}><Plus /><span><b>{store.language === 'bn' ? 'অবজেক্ট যোগ করুন' : 'Add object'}</b><small>{store.language === 'bn' ? 'উদ্ভিদ, ক্রিস্টাল ও প্রযুক্তি' : 'Nature, crystals and technology'}</small></span></button>
           {selected && <>
@@ -131,9 +142,11 @@ function App() {
 
     <footer className="statusbar">
       <Meter label={t.oxygen} value={78} color="#65ffd1" /><Meter label={t.power} value={92} color="#65c7ff" /><Meter label={t.humidity} value={64} color="#c27bff" />
+      <a className="author-credit" href="https://github.com/tbahsan" target="_blank" rel="noreferrer">Created by tbahsan</a>
       <div className="harmony"><i />{t.harmony}</div>
     </footer>
 
+    {relaxMode && <div className="relax-overlay"><div><strong>{primaryName}</strong><small>{store.environment.mode === 'day' ? t.day : t.night} · {store.entities.length} artifacts</small></div><a href="https://github.com/tbahsan" target="_blank" rel="noreferrer">by tbahsan</a><button onClick={exitRelax}><Minimize2 />{store.language === 'bn' ? 'বের হন' : 'Exit'}</button></div>}
     {homeOpen && <div className="home-hub">
       <div className="home-glow" /><div className="home-content">
         <div className="home-brand"><div className="orb"><Sparkles /></div><small>{alternateName}</small><h1>{primaryName}</h1><p>{store.language === 'bn' ? 'আপনার নিজস্ব জীবন্ত কাচের জগৎ গড়ে তুলুন' : 'Create your own living world of glass and light'}</p></div>
