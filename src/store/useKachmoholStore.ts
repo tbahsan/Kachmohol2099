@@ -37,7 +37,8 @@ interface Store extends ProjectData {
   setLanguage: (language: Language) => void
   select: (id: string | null) => void
   setTransformMode: (mode: TransformMode) => void
-  addEntity: (type: EntityType) => void
+  addEntity: (type: EntityType, position?: Vec3) => void
+  newProject: (template?: 'empty' | 'garden' | 'abyss') => void
   deleteSelected: () => void
   duplicateSelected: () => void
   updateEntity: (id: string, patch: Partial<Entity>, record?: boolean) => void
@@ -65,7 +66,7 @@ export const useKachmoholStore = create<Store>((set, get) => {
 
   return {
     schemaVersion: 1,
-    appVersion: '0.2.0',
+    appVersion: '0.3.0',
     projectMeta: { title: 'Neon Eden', author: 'Explorer-01', updatedAt: new Date().toISOString() },
     environment: { mode: 'night', auraColor: '#4defff', float: true },
     entities: initialEntities,
@@ -76,13 +77,21 @@ export const useKachmoholStore = create<Store>((set, get) => {
     setLanguage: language => { localStorage.setItem('kachmohol-language', language); set({ language }) },
     select: selectedId => set({ selectedId }),
     setTransformMode: transformMode => set({ transformMode }),
-    addEntity: type => {
+    addEntity: (type, position) => {
       checkpoint()
       const id = `${type}-${crypto.randomUUID()}`
       const names = { mushroom: 'Lumen Mushroom', crystal: 'Neon Crystal', core: 'Anti-gravity Core' }
       const colors = { mushroom: '#ff4fc8', crystal: '#59f3ff', core: '#8c74ff' }
-      const entity: Entity = { id, type, name: names[type], position: [(Math.random() - .5) * 2.2, type === 'core' ? 0 : -1.4, (Math.random() - .5) * 1.2], rotation: [0, Math.random() * Math.PI, 0], scale: [1, 1, 1], color: colors[type], locked: false, hidden: false }
+      const entity: Entity = { id, type, name: names[type], position: position ?? [(Math.random() - .5) * 2.2, type === 'core' ? 0 : -1.4, (Math.random() - .5) * 1.2], rotation: [0, Math.random() * Math.PI, 0], scale: [1, 1, 1], color: colors[type], locked: false, hidden: false }
       set(state => ({ entities: [...state.entities, entity], selectedId: id }))
+    },
+    newProject: (template = 'empty') => {
+      checkpoint()
+      const entities = template === 'empty' ? [] : template === 'garden' ? structuredClone(initialEntities) : [
+        { id: `crystal-${crypto.randomUUID()}`, type: 'crystal' as const, name: 'Abyss Crystal', position: [-.7,-1.58,.1] as Vec3, rotation: [0,.4,0] as Vec3, scale: [1.2,1.2,1.2] as Vec3, color: '#42e8ff', locked: false, hidden: false },
+        { id: `core-${crypto.randomUUID()}`, type: 'core' as const, name: 'Tidal Core', position: [.75,-.45,0] as Vec3, rotation: [.2,0,.1] as Vec3, scale: [.8,.8,.8] as Vec3, color: '#8f63ff', locked: false, hidden: false }
+      ]
+      set({ entities, environment: { mode: template === 'garden' ? 'day' : 'night', auraColor: template === 'abyss' ? '#4a8cff' : '#4defff', float: true }, selectedId: null, past: [], future: [], saveState: 'saving' })
     },
     deleteSelected: () => {
       const id = get().selectedId; if (!id) return

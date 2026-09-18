@@ -1,9 +1,9 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { ContactShadows, Float, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
+import { ContactShadows, Float, Html, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
-import { Suspense, useMemo, useRef } from 'react'
+import { Suspense, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useKachmoholStore, type Entity } from '../store/useKachmoholStore'
+import { useKachmoholStore, type Entity, type EntityType, type Vec3 } from '../store/useKachmoholStore'
 
 function Mushroom({ color }: { color: string }) {
   return <group>
@@ -47,7 +47,17 @@ function Artifact({ entity }: { entity: Entity }) {
   const visual = entity.type === 'mushroom' ? <Mushroom color={entity.color} /> : entity.type === 'crystal' ? <Crystal color={entity.color} /> : <Core color={entity.color} />
   const group = <group ref={ref} position={entity.position} rotation={entity.rotation} scale={entity.scale} onClick={e => { e.stopPropagation(); select(entity.id) }}>
     {visual}
-    {selectedId === entity.id && <mesh position={[0,.35,0]}><sphereGeometry args={[.82, 32, 20]} /><meshBasicMaterial color="#9bf8ff" wireframe transparent opacity={.08} depthWrite={false} /></mesh>}
+    {selectedId === entity.id && <>
+      <mesh position={[0,.35,0]}><sphereGeometry args={[.82, 32, 20]} /><meshBasicMaterial color="#9bf8ff" wireframe transparent opacity={.08} depthWrite={false} /></mesh>
+      <Html position={[0,1.34,0]} center distanceFactor={7} zIndexRange={[20,0]}>
+        <div className="world-toolbar" onPointerDown={e => e.stopPropagation()}>
+          <button onClick={() => useKachmoholStore.getState().setTransformMode('translate')}>Move</button>
+          <button onClick={() => useKachmoholStore.getState().setTransformMode('rotate')}>Rotate</button>
+          <button onClick={() => useKachmoholStore.getState().setTransformMode('scale')}>Scale</button>
+          <button className="more" onClick={() => window.dispatchEvent(new Event('kachmohol-open-inspector'))}>More</button>
+        </div>
+      </Html>
+    </>}
   </group>
   if (selectedId !== entity.id || entity.locked) return group
   return <TransformControls mode={mode} size={.65} onMouseUp={() => {
@@ -72,7 +82,21 @@ function Habitat({ isDay, aura }: { isDay: boolean; aura: string }) {
   </>
 }
 
-function World() {
+function PlacementSurface({ type, onPlace }: { type: EntityType; onPlace: (position: Vec3) => void }) {
+  const [point, setPoint] = useState<Vec3>([0, -1.58, 0])
+  const y = type === 'core' ? -.65 : -1.58
+  const visual = type === 'mushroom' ? <Mushroom color="#ff70d5" /> : type === 'crystal' ? <Crystal color="#58efff" /> : <Core color="#9982ff" />
+  return <>
+    <mesh position={[0,-1.56,0]} rotation={[-Math.PI/2,0,0]}
+      onPointerMove={e => { e.stopPropagation(); const x=e.point.x,z=e.point.z; const length=Math.hypot(x,z); const limit=2.05; const k=length>limit?limit/length:1; setPoint([x*k,y,z*k]) }}
+      onClick={e => { e.stopPropagation(); onPlace(point) }}>
+      <circleGeometry args={[2.25,64]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+    <group position={point} scale={[.92,.92,.92]}><Float speed={1.5} floatIntensity={.06}>{visual}</Float><mesh rotation={[-Math.PI/2,0,0]}><ringGeometry args={[.48,.54,48]} /><meshBasicMaterial color="#7ff7ff" transparent opacity={.8} toneMapped={false} /></mesh></group>
+  </>
+}
+
+function World({ pendingType, onPlace }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void }) {
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
@@ -91,6 +115,7 @@ function World() {
       <mesh><sphereGeometry args={[3.55, 96, 64]} /><MeshTransmissionMaterial backside color={isDay?'#d9fff0':env.auraColor} transmission={.96} thickness={.18} roughness={.08} chromaticAberration={.025} anisotropy={.1} distortion={.04} distortionScale={.16} temporalDistortion={.02} transparent opacity={.25} /></mesh>
       <mesh rotation={[0,0,.02]}><torusGeometry args={[3.52,.018,12,160]} /><meshBasicMaterial color={env.auraColor} transparent opacity={.72} toneMapped={false} /></mesh>
       <Habitat isDay={isDay} aura={env.auraColor} />
+      {pendingType && <PlacementSurface type={pendingType} onPlace={onPlace} />}
       {entities.map(entity => env.float && entity.type === 'core' ? <Float key={entity.id} speed={1.05} rotationIntensity={.05} floatIntensity={.18}><Artifact entity={entity} /></Float> : <Artifact key={entity.id} entity={entity} />)}
     </group>
     <OrbitControls makeDefault enableDamping dampingFactor={.055} minDistance={5.6} maxDistance={10} maxPolarAngle={Math.PI*.78} minPolarAngle={Math.PI*.16} />
@@ -98,8 +123,8 @@ function World() {
   </>
 }
 
-export function TerrariumCanvas() {
+export function TerrariumCanvas({ pendingType, onPlace }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} /></Suspense>
   </Canvas>
 }

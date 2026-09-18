@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Box, Camera, ChevronRight, Copy, Download, Languages, LayoutDashboard, LockKeyhole, Moon, Move3D, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload } from 'lucide-react'
+import { Box, Camera, ChevronRight, Copy, Download, FolderOpen, Home, Languages, LayoutDashboard, LockKeyhole, Moon, Move3D, Plus, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
@@ -15,13 +15,21 @@ function App() {
   const t = translations[store.language]
   const selected = store.entities.find(e => e.id === store.selectedId)
   const inputRef = useRef<HTMLInputElement>(null)
-  const [welcome, setWelcome] = useState(() => !sessionStorage.getItem('kachmohol-entered'))
+  const [welcome, setWelcome] = useState(false)
+  const [homeOpen, setHomeOpen] = useState(true)
   const [advanced, setAdvanced] = useState(false)
+  const [pendingType, setPendingType] = useState<EntityType | null>(null)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const primaryName = store.language === 'bn' ? 'কাচমহল ২০৯৯' : 'Kachmohol 2099'
   const alternateName = store.language === 'bn' ? 'KACHMOHOL 2099' : 'কাচমহল ২০৯৯'
 
   useEffect(() => { loadLocal().then(data => data && store.loadProject(data)).catch(console.warn) }, [])
+  useEffect(() => {
+    const open = () => setInspectorOpen(true)
+    window.addEventListener('kachmohol-open-inspector', open)
+    return () => window.removeEventListener('kachmohol-open-inspector', open)
+  }, [])
   useEffect(() => {
     const timer = window.setTimeout(async () => { await saveLocal(store.serialize()); store.markSaved() }, 700)
     return () => clearTimeout(timer)
@@ -57,11 +65,13 @@ function App() {
     if (!canvas) return; const a = document.createElement('a'); a.download = 'kachmohol-2099.png'; a.href = canvas.toDataURL('image/png'); a.click()
   }
   const closeWelcome = () => { sessionStorage.setItem('kachmohol-entered', '1'); setWelcome(false) }
+  const beginProject = (template: 'empty' | 'garden' | 'abyss') => { store.newProject(template); setHomeOpen(false); setPendingType(null); setInspectorOpen(false); if (template === 'empty') setWelcome(true) }
 
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><div><strong>{primaryName}</strong><small>{alternateName} · {t.subtitle}</small></div></div>
       <div className="top-actions">
+        <IconButton title="Creative Home" onClick={() => setHomeOpen(true)}><Home /></IconButton>
         <button className={`mode-button ${advanced ? 'active' : ''}`} onClick={() => setAdvanced(v => !v)}><LayoutDashboard />{advanced ? (store.language === 'bn' ? 'সহজ মোড' : 'Guided mode') : (store.language === 'bn' ? 'অ্যাডভান্সড' : 'Advanced')}</button>
         <span className={`save-state ${store.saveState}`}>{store.saveState === 'saved' ? t.saved : t.saving}</span>
         <div className="tool-pair"><IconButton title="Undo" onClick={store.undo} disabled={!store.past.length}><Undo2 /></IconButton><IconButton title="Redo" onClick={store.redo} disabled={!store.future.length}><Redo2 /></IconButton></div>
@@ -73,11 +83,11 @@ function App() {
       </div>
     </header>
 
-    <section className={`workspace ${advanced ? 'advanced' : 'guided'} ${selected ? 'has-selection' : ''}`}>
+    <section className={`workspace ${advanced ? 'advanced' : 'guided'} ${inspectorOpen ? 'show-inspector' : ''} ${pendingType ? 'placing' : ''}`}>
       <aside className="panel left-panel">
         <PanelTitle icon={<Box />} text={t.objects} />
         <div className="catalog">
-          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className="catalog-card" onClick={() => store.addEntity(type)}>
+          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className={`catalog-card ${pendingType === type ? 'active' : ''}`} onClick={() => { setPendingType(type); store.select(null); setInspectorOpen(false) }}>
             <span className={`artifact-preview p${i}`}><Sparkles /></span><span><b>{t[type]}</b><small>+ ADD TO DOME</small></span><ChevronRight />
           </button>)}
           <div className="locked-card"><LockKeyhole /><span>{t.locked}</span><b>06</b></div>
@@ -86,11 +96,13 @@ function App() {
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={e.id === store.selectedId ? 'selected' : ''} onClick={() => store.select(e.id)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
       </aside>
 
-      <section className="viewport"><TerrariumCanvas />
+      <section className="viewport"><TerrariumCanvas pendingType={pendingType} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
+        {pendingType && <div className="placement-banner"><span><Plus />{store.language === 'bn' ? 'ডোমের ভেতর পছন্দের জায়গায় ক্লিক করুন' : 'Click a spot inside the dome to place it'}</span><button onClick={() => setPendingType(null)}><X />{store.language === 'bn' ? 'বাতিল' : 'Cancel'}</button></div>}
         <div className="guided-environment"><button className={store.environment.mode === 'day' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'day' })}><Sun />{t.day}</button><button className={store.environment.mode === 'night' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'night' })}><Moon />{t.night}</button></div>
         <div className="viewport-hint">{t.tip}</div><div className="scanline" /></section>
 
       <aside className="panel right-panel">
+        <button className="inspector-close" onClick={() => setInspectorOpen(false)} aria-label="Close inspector"><X /></button>
         <PanelTitle icon={<Sparkles />} text={t.environment} />
         <div className="segmented"><button className={store.environment.mode === 'day' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'day' })}><Sun />{t.day}</button><button className={store.environment.mode === 'night' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'night' })}><Moon />{t.night}</button></div>
         <label className="field"><span>{t.aura}</span><input type="color" value={store.environment.auraColor} onChange={e => store.setEnvironment({ auraColor: e.target.value })} /></label>
@@ -110,6 +122,21 @@ function App() {
       <div className="harmony"><i />{t.harmony}</div>
     </footer>
 
+    {homeOpen && <div className="home-hub">
+      <div className="home-glow" /><div className="home-content">
+        <div className="home-brand"><div className="orb"><Sparkles /></div><small>{alternateName}</small><h1>{primaryName}</h1><p>{store.language === 'bn' ? 'আপনার নিজস্ব জীবন্ত কাচের জগৎ গড়ে তুলুন' : 'Create your own living world of glass and light'}</p></div>
+        <div className="home-actions">
+          <button className="continue-card" onClick={() => setHomeOpen(false)}><FolderOpen /><span><b>{store.language === 'bn' ? 'আগের কাজ চালিয়ে যান' : 'Continue creating'}</b><small>{store.entities.length} {store.language === 'bn' ? 'টি আর্টিফ্যাক্ট · লোকালি সেভ' : 'artifacts · saved locally'}</small></span><ChevronRight /></button>
+          <div className="new-project-title"><span>{store.language === 'bn' ? 'নতুন কাচমহল' : 'START A NEW DOME'}</span></div>
+          <div className="template-grid">
+            <button className="template empty" onClick={() => beginProject('empty')}><Plus /><span><b>{store.language === 'bn' ? 'খালি ডোম' : 'Empty Dome'}</b><small>{store.language === 'bn' ? 'শূন্য থেকে তৈরি করুন' : 'Begin from nothing'}</small></span></button>
+            <button className="template garden" onClick={() => beginProject('garden')}><span className="template-art">✦</span><span><b>{store.language === 'bn' ? 'লুমেন উদ্যান' : 'Lumen Garden'}</b><small>{store.language === 'bn' ? 'উজ্জ্বল সোলারপাঙ্ক' : 'Bright solarpunk'}</small></span></button>
+            <button className="template abyss" onClick={() => beginProject('abyss')}><span className="template-art">◉</span><span><b>{store.language === 'bn' ? 'অ্যাবিসাল কোর' : 'Abyssal Core'}</b><small>{store.language === 'bn' ? 'গভীর নিয়ন রাত্রি' : 'Deep neon night'}</small></span></button>
+          </div>
+        </div>
+        <button className="home-language" onClick={() => store.setLanguage(store.language === 'bn' ? 'en' : 'bn')}><Languages />{store.language === 'bn' ? 'Continue in English' : 'বাংলায় চালিয়ে যান'}</button>
+      </div>
+    </div>}
     {welcome && <div className="modal-backdrop"><div className="welcome-card"><div className="orb"><Sparkles /></div><small>KACHMOHOL 2099</small><h1>{t.welcome}</h1><p>{t.welcomeText}</p><button onClick={closeWelcome}>{t.start}<ChevronRight /></button><span>{t.tip}</span></div></div>}
     {notice && <button className="toast" onClick={() => setNotice('')}>{notice}</button>}
   </main>
