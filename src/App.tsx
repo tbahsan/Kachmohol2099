@@ -3,6 +3,7 @@ import { Box, Camera, ChevronRight, Copy, Download, FolderOpen, Home, Languages,
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
+import { getObjectDefinition, objectCatalog } from './catalog/objects'
 import { loadLocal, saveLocal } from './storage/database'
 import './styles/app.css'
 
@@ -14,6 +15,9 @@ function App() {
   const store = useKachmoholStore()
   const t = translations[store.language]
   const selected = store.entities.find(e => e.id === store.selectedId)
+  const selectedDefinition = selected ? getObjectDefinition(selected.type) : null
+  const impacts = store.entities.reduce((total, entity) => { const definition=getObjectDefinition(entity.type); return { oxygen:total.oxygen+definition.oxygen, power:total.power+definition.power, humidity:total.humidity+definition.humidity } }, {oxygen:45,power:45,humidity:45})
+  const stats = { oxygen:Math.max(0,Math.min(100,impacts.oxygen)), power:Math.max(0,Math.min(100,impacts.power)), humidity:Math.max(0,Math.min(100,impacts.humidity)) }
   const inputRef = useRef<HTMLInputElement>(null)
   const [welcome, setWelcome] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
@@ -72,7 +76,8 @@ function App() {
     const index = store.entities.length
     const angle = index * 2.35 + .6
     const radius = .75 + (index % 3) * .38
-    const position: [number, number, number] = [Math.cos(angle) * radius, type === 'core' ? -.55 : -1.58, Math.sin(angle) * radius]
+    const floating = ['core', 'waterOrb', 'jellyfish', 'droneBee'].includes(type)
+    const position: [number, number, number] = [Math.cos(angle) * radius, floating ? -.45 + (index % 2) * .55 : -1.58, Math.sin(angle) * radius]
     store.addEntity(type, position); setCatalogOpen(false); setNotice(store.language === 'bn' ? 'অবজেক্ট যোগ হয়েছে—ধরে টেনে সরান' : 'Object added — drag it to move')
   }
   const enterRelax = () => { setRelaxMode(true); document.documentElement.requestFullscreen?.().catch(() => undefined) }
@@ -100,10 +105,9 @@ function App() {
         <button className="catalog-close" onClick={() => setCatalogOpen(false)} aria-label="Close catalog"><X /></button>
         <PanelTitle icon={<Box />} text={t.objects} />
         <div className="catalog">
-          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className={`catalog-card ${pendingType === type ? 'active' : ''}`} onClick={() => { addSmart(type); setInspectorOpen(false) }}>
-            <span className={`artifact-preview p${i}`}><Sparkles /></span><span><b>{t[type]}</b><small>+ ADD TO DOME</small></span><ChevronRight />
+          {objectCatalog.map((definition, index) => <button key={definition.type} className={`catalog-card category-${definition.category}`} onClick={() => { addSmart(definition.type); setInspectorOpen(false) }}>
+            <span className={`artifact-preview p${index % 3}`}><Sparkles /></span><span><em>{definition.category}</em><b>{definition.name[store.language]}</b><small>{definition.description[store.language]}</small></span><ChevronRight />
           </button>)}
-          <div className="locked-card"><LockKeyhole /><span>{t.locked}</span><b>06</b></div>
         </div>
         <PanelTitle icon={<Sparkles />} text={t.scene} />
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={e.id === store.selectedId ? 'selected' : ''} onClick={() => store.select(e.id)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
@@ -117,6 +121,7 @@ function App() {
             <div className="selected-summary"><i className={`dot ${selected.type}`} /><span><b>{selected.name}</b><small>{store.language === 'bn' ? 'ধরে টেনে সরান' : 'Drag the object to move'}</small></span></div>
             <div className="step-control"><small>{store.language === 'bn' ? 'ঘোরান' : 'Rotate'}</small><span><button onClick={() => store.updateEntity(selected.id,{rotation:[selected.rotation[0],selected.rotation[1]-.25,selected.rotation[2]]})}>−</button><button onClick={() => store.updateEntity(selected.id,{rotation:[selected.rotation[0],selected.rotation[1]+.25,selected.rotation[2]]})}>+</button></span></div>
             <div className="step-control"><small>{store.language === 'bn' ? 'আকার' : 'Size'}</small><span><button onClick={() => {const n=Math.max(.35,selected.scale[0]-.12);store.updateEntity(selected.id,{scale:[n,n,n]})}}>−</button><button onClick={() => {const n=Math.min(2.5,selected.scale[0]+.12);store.updateEntity(selected.id,{scale:[n,n,n]})}}>+</button></span></div>
+            {selectedDefinition && <button className="interact-button" onClick={() => { store.updateEntity(selected.id,{interactionCount:(selected.interactionCount ?? 0)+1}); setNotice(selectedDefinition.interaction[store.language]) }}><Sparkles />{selectedDefinition.interaction[store.language]}</button>}
             <button className="tray-more" onClick={() => setInspectorOpen(true)}>{store.language === 'bn' ? 'আরও' : 'More'}<ChevronRight /></button>
           </>}
         </div>}
@@ -133,6 +138,7 @@ function App() {
         <div className="separator" />
         {selected ? <div className="inspector">
           <small className="eyebrow">{t.selected}</small><input className="name-input" value={selected.name} onChange={e => store.updateEntity(selected.id, { name: e.target.value })} />
+          {selectedDefinition && <><p className="artifact-description">{selectedDefinition.description[store.language]}</p><div className="impact-row"><span>O₂ {selectedDefinition.oxygen > 0 ? '+' : ''}{selectedDefinition.oxygen}</span><span>⚡ {selectedDefinition.power > 0 ? '+' : ''}{selectedDefinition.power}</span><span>◌ {selectedDefinition.humidity > 0 ? '+' : ''}{selectedDefinition.humidity}</span></div><button className="discover-button" onClick={() => store.updateEntity(selected.id,{interactionCount:(selected.interactionCount ?? 0)+1})}><Sparkles />{selectedDefinition.interaction[store.language]}</button></>}
           <div className="transform-tools">{([['translate', Move3D], ['rotate', Rotate3D], ['scale', Scale3D]] as [TransformMode, typeof Move3D][]).map(([mode, Icon]) => <IconButton key={mode} title={mode} active={store.transformMode === mode} onClick={() => store.setTransformMode(mode)}><Icon /></IconButton>)}</div>
           <label className="field color-field"><span>{t.color}</span><input type="color" value={selected.color} onChange={e => store.updateEntity(selected.id, { color: e.target.value })} /></label>
           <div className="object-actions"><button onClick={store.duplicateSelected}><Copy />{t.duplicate}</button><button className="danger" onClick={store.deleteSelected}><Trash2 />{t.remove}</button></div>
@@ -141,7 +147,7 @@ function App() {
     </section>
 
     <footer className="statusbar">
-      <Meter label={t.oxygen} value={78} color="#65ffd1" /><Meter label={t.power} value={92} color="#65c7ff" /><Meter label={t.humidity} value={64} color="#c27bff" />
+      <Meter label={t.oxygen} value={stats.oxygen} color="#65ffd1" /><Meter label={t.power} value={stats.power} color="#65c7ff" /><Meter label={t.humidity} value={stats.humidity} color="#c27bff" />
       <a className="author-credit" href="https://github.com/tbahsan" target="_blank" rel="noreferrer">Created by tbahsan</a>
       <div className="harmony"><i />{t.harmony}</div>
     </footer>

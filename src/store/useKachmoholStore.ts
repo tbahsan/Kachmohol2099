@@ -1,7 +1,8 @@
 import { create } from 'zustand'
+import { getObjectDefinition } from '../catalog/objects'
 
 export type Language = 'en' | 'bn'
-export type EntityType = 'mushroom' | 'crystal' | 'core'
+export type EntityType = 'mushroom' | 'bonsai' | 'coral' | 'waterOrb' | 'crystal' | 'core' | 'solarFlower' | 'beacon' | 'jellyfish' | 'droneBee'
 export type TransformMode = 'translate' | 'rotate' | 'scale'
 export type Vec3 = [number, number, number]
 
@@ -15,6 +16,7 @@ export interface Entity {
   color: string
   locked: boolean
   hidden: boolean
+  interactionCount?: number
 }
 
 export interface ProjectData {
@@ -51,9 +53,9 @@ interface Store extends ProjectData {
 }
 
 const initialEntities: Entity[] = [
-  { id: 'mushroom-welcome', type: 'mushroom', name: 'Lumen Mushroom', position: [-1.25, -1.55, 0.2], rotation: [0, 0, -0.08], scale: [1, 1, 1], color: '#ff4fc8', locked: false, hidden: false },
-  { id: 'crystal-welcome', type: 'crystal', name: 'Neon Crystal', position: [1.25, -1.42, 0], rotation: [0, 0, 0.12], scale: [1, 1.25, 1], color: '#59f3ff', locked: false, hidden: false },
-  { id: 'core-welcome', type: 'core', name: 'Anti-gravity Core', position: [0, 0.25, 0], rotation: [0.25, 0, 0.1], scale: [.85, .85, .85], color: '#8c74ff', locked: false, hidden: false }
+  { id: 'mushroom-welcome', type: 'mushroom', name: 'Lumen Mushroom', position: [-1.25, -1.55, 0.2], rotation: [0, 0, -0.08], scale: [1, 1, 1], color: '#ff4fc8', locked: false, hidden: false, interactionCount: 0 },
+  { id: 'crystal-welcome', type: 'crystal', name: 'Neon Crystal', position: [1.25, -1.42, 0], rotation: [0, 0, 0.12], scale: [1, 1.25, 1], color: '#59f3ff', locked: false, hidden: false, interactionCount: 0 },
+  { id: 'core-welcome', type: 'core', name: 'Anti-gravity Core', position: [0, 0.25, 0], rotation: [0.25, 0, 0.1], scale: [.85, .85, .85], color: '#8c74ff', locked: false, hidden: false, interactionCount: 0 }
 ]
 
 const copySnapshot = (s: Snapshot): Snapshot => structuredClone(s)
@@ -66,7 +68,7 @@ export const useKachmoholStore = create<Store>((set, get) => {
 
   return {
     schemaVersion: 1,
-    appVersion: '0.5.0',
+    appVersion: '0.6.0',
     projectMeta: { title: 'Neon Eden', author: 'Explorer-01', updatedAt: new Date().toISOString() },
     environment: { mode: 'night', auraColor: '#4defff', float: true },
     entities: initialEntities,
@@ -80,16 +82,15 @@ export const useKachmoholStore = create<Store>((set, get) => {
     addEntity: (type, position) => {
       checkpoint()
       const id = `${type}-${crypto.randomUUID()}`
-      const names = { mushroom: 'Lumen Mushroom', crystal: 'Neon Crystal', core: 'Anti-gravity Core' }
-      const colors = { mushroom: '#ff4fc8', crystal: '#59f3ff', core: '#8c74ff' }
-      const entity: Entity = { id, type, name: names[type], position: position ?? [(Math.random() - .5) * 2.2, type === 'core' ? 0 : -1.4, (Math.random() - .5) * 1.2], rotation: [0, Math.random() * Math.PI, 0], scale: [1, 1, 1], color: colors[type], locked: false, hidden: false }
+      const definition = getObjectDefinition(type)
+      const entity: Entity = { id, type, name: definition.name.en, position: position ?? [(Math.random() - .5) * 2.2, ['core','waterOrb','jellyfish','droneBee'].includes(type) ? -.45 : -1.58, (Math.random() - .5) * 1.2], rotation: [0, Math.random() * Math.PI, 0], scale: [1, 1, 1], color: definition.color, locked: false, hidden: false, interactionCount: 0 }
       set(state => ({ entities: [...state.entities, entity], selectedId: id }))
     },
     newProject: (template = 'empty') => {
       checkpoint()
       const entities = template === 'empty' ? [] : template === 'garden' ? structuredClone(initialEntities) : [
-        { id: `crystal-${crypto.randomUUID()}`, type: 'crystal' as const, name: 'Abyss Crystal', position: [-.7,-1.58,.1] as Vec3, rotation: [0,.4,0] as Vec3, scale: [1.2,1.2,1.2] as Vec3, color: '#42e8ff', locked: false, hidden: false },
-        { id: `core-${crypto.randomUUID()}`, type: 'core' as const, name: 'Tidal Core', position: [.75,-.45,0] as Vec3, rotation: [.2,0,.1] as Vec3, scale: [.8,.8,.8] as Vec3, color: '#8f63ff', locked: false, hidden: false }
+        { id: `crystal-${crypto.randomUUID()}`, type: 'crystal' as const, name: 'Abyss Crystal', position: [-.7,-1.58,.1] as Vec3, rotation: [0,.4,0] as Vec3, scale: [1.2,1.2,1.2] as Vec3, color: '#42e8ff', locked: false, hidden: false, interactionCount: 0 },
+        { id: `core-${crypto.randomUUID()}`, type: 'core' as const, name: 'Tidal Core', position: [.75,-.45,0] as Vec3, rotation: [.2,0,.1] as Vec3, scale: [.8,.8,.8] as Vec3, color: '#8f63ff', locked: false, hidden: false, interactionCount: 0 }
       ]
       set({ entities, environment: { mode: template === 'garden' ? 'day' : 'night', auraColor: template === 'abyss' ? '#4a8cff' : '#4defff', float: true }, selectedId: null, past: [], future: [], saveState: 'saving' })
     },
