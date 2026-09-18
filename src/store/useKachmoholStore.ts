@@ -66,7 +66,7 @@ export const useKachmoholStore = create<Store>((set, get) => {
 
   return {
     schemaVersion: 1,
-    appVersion: '0.3.0',
+    appVersion: '0.4.0',
     projectMeta: { title: 'Neon Eden', author: 'Explorer-01', updatedAt: new Date().toISOString() },
     environment: { mode: 'night', auraColor: '#4defff', float: true },
     entities: initialEntities,

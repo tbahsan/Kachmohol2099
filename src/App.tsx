@@ -19,6 +19,7 @@ function App() {
   const [homeOpen, setHomeOpen] = useState(true)
   const [advanced, setAdvanced] = useState(false)
   const [pendingType, setPendingType] = useState<EntityType | null>(null)
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const primaryName = store.language === 'bn' ? 'কাচমহল ২০৯৯' : 'Kachmohol 2099'
@@ -83,11 +84,12 @@ function App() {
       </div>
     </header>
 
-    <section className={`workspace ${advanced ? 'advanced' : 'guided'} ${inspectorOpen ? 'show-inspector' : ''} ${pendingType ? 'placing' : ''}`}>
+    <section className={`workspace ${advanced ? 'advanced' : 'guided'} ${inspectorOpen ? 'show-inspector' : ''} ${catalogOpen ? 'catalog-open' : ''} ${pendingType ? 'placing' : ''}`}>
       <aside className="panel left-panel">
+        <button className="catalog-close" onClick={() => setCatalogOpen(false)} aria-label="Close catalog"><X /></button>
         <PanelTitle icon={<Box />} text={t.objects} />
         <div className="catalog">
-          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className={`catalog-card ${pendingType === type ? 'active' : ''}`} onClick={() => { setPendingType(type); store.select(null); setInspectorOpen(false) }}>
+          {(['mushroom', 'crystal', 'core'] as EntityType[]).map((type, i) => <button key={type} className={`catalog-card ${pendingType === type ? 'active' : ''}`} onClick={() => { setPendingType(type); setCatalogOpen(false); store.select(null); setInspectorOpen(false) }}>
             <span className={`artifact-preview p${i}`}><Sparkles /></span><span><b>{t[type]}</b><small>+ ADD TO DOME</small></span><ChevronRight />
           </button>)}
           <div className="locked-card"><LockKeyhole /><span>{t.locked}</span><b>06</b></div>
@@ -96,7 +98,17 @@ function App() {
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={e.id === store.selectedId ? 'selected' : ''} onClick={() => store.select(e.id)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
       </aside>
 
-      <section className="viewport"><TerrariumCanvas pendingType={pendingType} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
+      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
+        {!advanced && !pendingType && <div className="guided-create-tray">
+          <button className="add-object-button" onClick={() => setCatalogOpen(true)}><Plus /><span><b>{store.language === 'bn' ? 'অবজেক্ট যোগ করুন' : 'Add object'}</b><small>{store.language === 'bn' ? 'উদ্ভিদ, ক্রিস্টাল ও প্রযুক্তি' : 'Nature, crystals and technology'}</small></span></button>
+          {selected && <>
+            <span className="tray-divider" />
+            <div className="selected-summary"><i className={`dot ${selected.type}`} /><span><b>{selected.name}</b><small>{store.language === 'bn' ? 'ধরে টেনে সরান' : 'Drag the object to move'}</small></span></div>
+            <div className="step-control"><small>{store.language === 'bn' ? 'ঘোরান' : 'Rotate'}</small><span><button onClick={() => store.updateEntity(selected.id,{rotation:[selected.rotation[0],selected.rotation[1]-.25,selected.rotation[2]]})}>−</button><button onClick={() => store.updateEntity(selected.id,{rotation:[selected.rotation[0],selected.rotation[1]+.25,selected.rotation[2]]})}>+</button></span></div>
+            <div className="step-control"><small>{store.language === 'bn' ? 'আকার' : 'Size'}</small><span><button onClick={() => {const n=Math.max(.35,selected.scale[0]-.12);store.updateEntity(selected.id,{scale:[n,n,n]})}}>−</button><button onClick={() => {const n=Math.min(2.5,selected.scale[0]+.12);store.updateEntity(selected.id,{scale:[n,n,n]})}}>+</button></span></div>
+            <button className="tray-more" onClick={() => setInspectorOpen(true)}>{store.language === 'bn' ? 'আরও' : 'More'}<ChevronRight /></button>
+          </>}
+        </div>}
         {pendingType && <div className="placement-banner"><span><Plus />{store.language === 'bn' ? 'ডোমের ভেতর পছন্দের জায়গায় ক্লিক করুন' : 'Click a spot inside the dome to place it'}</span><button onClick={() => setPendingType(null)}><X />{store.language === 'bn' ? 'বাতিল' : 'Cancel'}</button></div>}
         <div className="guided-environment"><button className={store.environment.mode === 'day' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'day' })}><Sun />{t.day}</button><button className={store.environment.mode === 'night' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'night' })}><Moon />{t.night}</button></div>
         <div className="viewport-hint">{t.tip}</div><div className="scanline" /></section>

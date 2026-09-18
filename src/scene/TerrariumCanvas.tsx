@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Float, Html, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { Suspense, useMemo, useRef, useState } from 'react'
@@ -37,33 +37,82 @@ function Core({ color }: { color: string }) {
   </group>
 }
 
-function Artifact({ entity }: { entity: Entity }) {
+function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
   const ref = useRef<THREE.Group>(null)
-  const selectedId = useKachmoholStore(s => s.selectedId)
-  const mode = useKachmoholStore(s => s.transformMode)
-  const select = useKachmoholStore(s => s.select)
-  const update = useKachmoholStore(s => s.updateEntity)
+  const dragging = useRef(false)
+  const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), -entity.position[1]), [entity.position[1]])
+  const dragPoint = useMemo(() => new THREE.Vector3(), [])
+  const selectedId = useKachmoholStore(state => state.selectedId)
+  const mode = useKachmoholStore(state => state.transformMode)
+  const select = useKachmoholStore(state => state.select)
+  const update = useKachmoholStore(state => state.updateEntity)
   if (entity.hidden) return null
   const visual = entity.type === 'mushroom' ? <Mushroom color={entity.color} /> : entity.type === 'crystal' ? <Crystal color={entity.color} /> : <Core color={entity.color} />
-  const group = <group ref={ref} position={entity.position} rotation={entity.rotation} scale={entity.scale} onClick={e => { e.stopPropagation(); select(entity.id) }}>
+  const finishDrag = (event: ThreeEvent<PointerEvent>) => {
+    if (!dragging.current || !ref.current) return
+    dragging.current = false
+    ;(event.target as Element).releasePointerCapture?.(event.pointerId)
+    const object = ref.current
+    update(entity.id, { position: object.position.toArray() as [number, number, number] })
+  }
+  const group = <group ref={ref} position={entity.position} rotation={entity.rotation} scale={entity.scale}
+    onClick={event => { event.stopPropagation(); select(entity.id) }}
+    onPointerDown={event => {
+      if (advanced || entity.locked) return
+      event.stopPropagation(); select(entity.id); dragging.current = true
+      ;(event.target as Element).setPointerCapture?.(event.pointerId)
+      document.body.classList.add('dragging-artifact')
+    }}
+    onPointerMove={event => {
+      if (!dragging.current || !ref.current || advanced) return
+      event.stopPropagation()
+      if (event.ray.intersectPlane(dragPlane, dragPoint)) {
+        const length = Math.hypot(dragPoint.x, dragPoint.z); const limit = 2.05; const factor = length > limit ? limit / length : 1
+        ref.current.position.set(dragPoint.x * factor, entity.position[1], dragPoint.z * factor)
+      }
+    }}
+    onPointerUp={event => { document.body.classList.remove('dragging-artifact'); finishDrag(event) }}>
     {visual}
-    {selectedId === entity.id && <>
-      <mesh position={[0,.35,0]}><sphereGeometry args={[.82, 32, 20]} /><meshBasicMaterial color="#9bf8ff" wireframe transparent opacity={.08} depthWrite={false} /></mesh>
-      <Html position={[0,1.34,0]} center distanceFactor={7} zIndexRange={[20,0]}>
-        <div className="world-toolbar" onPointerDown={e => e.stopPropagation()}>
-          <button onClick={() => useKachmoholStore.getState().setTransformMode('translate')}>Move</button>
-          <button onClick={() => useKachmoholStore.getState().setTransformMode('rotate')}>Rotate</button>
-          <button onClick={() => useKachmoholStore.getState().setTransformMode('scale')}>Scale</button>
-          <button className="more" onClick={() => window.dispatchEvent(new Event('kachmohol-open-inspector'))}>More</button>
-        </div>
-      </Html>
-    </>}
+    {selectedId === entity.id && <mesh position={[0,.35,0]}><sphereGeometry args={[.82, 32, 20]} /><meshBasicMaterial color="#9bf8ff" transparent opacity={.035} depthWrite={false} /></mesh>}
   </group>
-  if (selectedId !== entity.id || entity.locked) return group
+  if (!advanced || selectedId !== entity.id || entity.locked) return group
   return <TransformControls mode={mode} size={.65} onMouseUp={() => {
-    const o = ref.current; if (!o) return
-    update(entity.id, { position: o.position.toArray() as [number, number, number], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: o.scale.toArray() as [number, number, number] })
+    const object = ref.current; if (!object) return
+    update(entity.id, { position: object.position.toArray() as [number, number, number], rotation: [object.rotation.x, object.rotation.y, object.rotation.z], scale: object.scale.toArray() as [number, number, number] })
   }}>{group}</TransformControls>
+}
+function DaySky() {
+  const clouds = useRef<THREE.Group>(null)
+  useFrame((_, delta) => {
+    if (!clouds.current) return
+    clouds.current.position.x += delta * .085
+    if (clouds.current.position.x > 9) clouds.current.position.x = -9
+  })
+  return <>
+    <mesh scale={38}><sphereGeometry args={[1,48,24]} /><shaderMaterial side={THREE.BackSide} depthWrite={false} vertexShader={`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`varying vec3 vPos; void main(){float h=normalize(vPos).y*.5+.5;vec3 horizon=vec3(.64,.82,.84);vec3 zenith=vec3(.16,.48,.66);gl_FragColor=vec4(mix(horizon,zenith,smoothstep(.18,.92,h)),1.0);}`} /></mesh>
+    <group position={[-5,4,-12]}><mesh><sphereGeometry args={[.72,32,32]} /><meshBasicMaterial color="#fff4b5" toneMapped={false} /></mesh><pointLight color="#ffd98c" intensity={24} distance={30} /></group>
+    <group ref={clouds} position={[-6,2.8,-10]}>
+      {[0,3.8,7.2,11.5].map((offset,index)=><group key={index} position={[offset,Math.sin(index*2)*.7,index%2*-2]} scale={.8+index%2*.35}>
+        {[[-.8,0,0],[-.25,.22,0],[.35,.12,0],[.8,-.05,0]].map((position,i)=><mesh key={i} position={position as [number,number,number]}><sphereGeometry args={[.62+i%2*.18,24,16]} /><meshStandardMaterial color="#f2ffff" transparent opacity={.45} roughness={1} depthWrite={false} /></mesh>)}
+      </group>)}
+    </group>
+  </>
+}
+
+function NightSky() {
+  const galaxy = useRef<THREE.Points>(null)
+  const positions = useMemo(() => {
+    const count=2600; const data=new Float32Array(count*3)
+    for(let i=0;i<count;i++){const radius=Math.pow(Math.random(),.65)*18;const arm=i%4;const angle=radius*.7+arm*Math.PI/2+(Math.random()-.5)*.55;data[i*3]=Math.cos(angle)*radius;data[i*3+1]=(Math.random()-.5)*(1.2+radius*.08);data[i*3+2]=Math.sin(angle)*radius}
+    return data
+  },[])
+  useFrame((state,delta)=>{if(galaxy.current){galaxy.current.rotation.y+=delta*.008;const material=galaxy.current.material as THREE.PointsMaterial;material.opacity=.62+Math.sin(state.clock.elapsedTime*.7)*.08}})
+  return <>
+    <mesh scale={38}><sphereGeometry args={[1,48,24]} /><meshBasicMaterial side={THREE.BackSide} color="#01040d" /></mesh>
+    <points ref={galaxy} rotation={[.85,0,.2]} position={[0,3,-11]}><bufferGeometry><bufferAttribute attach="attributes-position" args={[positions,3]} /></bufferGeometry><pointsMaterial color="#a8c9ff" size={.075} transparent opacity={.68} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} /></points>
+    <mesh position={[-7,2,-15]} rotation={[.2,.5,.4]} scale={[9,3,1]}><sphereGeometry args={[1,32,16]} /><meshBasicMaterial color="#521178" transparent opacity={.08} blending={THREE.AdditiveBlending} depthWrite={false} /></mesh>
+    <Stars radius={32} depth={28} count={3000} factor={2.4} fade speed={.38} />
+  </>
 }
 
 function Habitat({ isDay, aura }: { isDay: boolean; aura: string }) {
@@ -96,7 +145,7 @@ function PlacementSurface({ type, onPlace }: { type: EntityType; onPlace: (posit
   </>
 }
 
-function World({ pendingType, onPlace }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void }) {
+function World({ pendingType, onPlace, advanced }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean }) {
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
@@ -109,22 +158,22 @@ function World({ pendingType, onPlace }: { pendingType: EntityType | null; onPla
     <directionalLight castShadow position={[4, 7, 5]} intensity={isDay ? 3.8 : .5} color={isDay ? '#fff0c2' : '#8cc8ff'} shadow-mapSize={[1024,1024]} />
     <pointLight position={[-3, 1, 2]} intensity={isDay?4:18} color={isDay?'#ffd59c':'#24dfff'} distance={9} />
     <pointLight position={[3, -1, -2]} intensity={isDay?2:14} color="#d43cff" distance={8} />
-    {!isDay && <Stars radius={50} depth={24} count={2200} factor={2.2} fade speed={.18} />}
+    {isDay ? <DaySky /> : <NightSky />}
     <Sparkles count={isDay?45:95} scale={[6,5,5]} size={isDay?1.6:2.5} speed={.18} opacity={isDay?.3:.65} color={isDay?'#f7e8b2':env.auraColor} />
     <group onPointerMissed={() => select(null)}>
       <mesh><sphereGeometry args={[3.55, 96, 64]} /><MeshTransmissionMaterial backside color={isDay?'#d9fff0':env.auraColor} transmission={.96} thickness={.18} roughness={.08} chromaticAberration={.025} anisotropy={.1} distortion={.04} distortionScale={.16} temporalDistortion={.02} transparent opacity={.25} /></mesh>
       <mesh rotation={[0,0,.02]}><torusGeometry args={[3.52,.018,12,160]} /><meshBasicMaterial color={env.auraColor} transparent opacity={.72} toneMapped={false} /></mesh>
       <Habitat isDay={isDay} aura={env.auraColor} />
       {pendingType && <PlacementSurface type={pendingType} onPlace={onPlace} />}
-      {entities.map(entity => env.float && entity.type === 'core' ? <Float key={entity.id} speed={1.05} rotationIntensity={.05} floatIntensity={.18}><Artifact entity={entity} /></Float> : <Artifact key={entity.id} entity={entity} />)}
+      {entities.map(entity => env.float && entity.type === 'core' ? <Float key={entity.id} speed={1.05} rotationIntensity={.05} floatIntensity={.18}><Artifact entity={entity} advanced={advanced} /></Float> : <Artifact key={entity.id} entity={entity} advanced={advanced} />)}
     </group>
     <OrbitControls makeDefault enableDamping dampingFactor={.055} minDistance={5.6} maxDistance={10} maxPolarAngle={Math.PI*.78} minPolarAngle={Math.PI*.16} />
     <EffectComposer multisampling={0}><Bloom mipmapBlur intensity={isDay?.45:1.25} luminanceThreshold={isDay?.92:.48} radius={.72} /><Vignette eskil={false} offset={.18} darkness={isDay?.35:.66} /></EffectComposer>
   </>
 }
 
-export function TerrariumCanvas({ pendingType, onPlace }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void }) {
+export function TerrariumCanvas({ pendingType, onPlace, advanced }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} /></Suspense>
   </Canvas>
 }
