@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="150" viewBox="0 0 720 150" role="img" aria-labelledby="title desc">
+  <title id="title">Play Kachmohol 2099</title><desc id="desc">Open the live creative builder</desc>
+  <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#075d78"/><stop offset=".52" stop-color="#5b28a2"/><stop offset="1" stop-color="#c32f87"/></linearGradient><filter id="s"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <rect x="12" y="12" width="696" height="126" rx="30" fill="#07111f" stroke="#70f4ff" stroke-width="3"/>
+  <rect x="22" y="22" width="676" height="106" rx="23" fill="url(#g)" opacity=".88"/>
+  <circle cx="105" cy="75" r="34" fill="none" stroke="#fff" stroke-width="3" filter="url(#s)"/><path d="M96 55l28 20-28 20z" fill="#fff"/>
+  <text x="400" y="69" fill="#fff" font-family="Arial,sans-serif" font-weight="700" font-size="31" text-anchor="middle" letter-spacing="4">PLAY KACHMOHOL 2099</text>
+  <text x="400" y="101" fill="#c6fbff" font-family="Arial,sans-serif" font-size="18" text-anchor="middle">খেলুন · কাচের জগৎ তৈরি করুন</text>
+</svg>

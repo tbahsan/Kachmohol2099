@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/locales/translations.ts","./src/scene/TerrariumCanvas.tsx","./src/storage/database.ts","./src/store/useKachmoholStore.ts"],"version":"5.9.3"}
