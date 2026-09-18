@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Box, Camera, ChevronRight, Copy, Download, Languages, LockKeyhole, Moon, Move3D, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload } from 'lucide-react'
+import { Box, Camera, ChevronRight, Copy, Download, Languages, LayoutDashboard, LockKeyhole, Moon, Move3D, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload } from 'lucide-react'
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
@@ -16,7 +16,10 @@ function App() {
   const selected = store.entities.find(e => e.id === store.selectedId)
   const inputRef = useRef<HTMLInputElement>(null)
   const [welcome, setWelcome] = useState(() => !sessionStorage.getItem('kachmohol-entered'))
+  const [advanced, setAdvanced] = useState(false)
   const [notice, setNotice] = useState('')
+  const primaryName = store.language === 'bn' ? 'কাচমহল ২০৯৯' : 'Kachmohol 2099'
+  const alternateName = store.language === 'bn' ? 'KACHMOHOL 2099' : 'কাচমহল ২০৯৯'
 
   useEffect(() => { loadLocal().then(data => data && store.loadProject(data)).catch(console.warn) }, [])
   useEffect(() => {
@@ -57,8 +60,9 @@ function App() {
 
   return <main className="app-shell">
     <header className="topbar">
-      <div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><div><strong>কাচমহল <span>২০৯৯</span></strong><small>KACHMOHOL 2099 · {t.subtitle}</small></div></div>
+      <div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><div><strong>{primaryName}</strong><small>{alternateName} · {t.subtitle}</small></div></div>
       <div className="top-actions">
+        <button className={`mode-button ${advanced ? 'active' : ''}`} onClick={() => setAdvanced(v => !v)}><LayoutDashboard />{advanced ? (store.language === 'bn' ? 'সহজ মোড' : 'Guided mode') : (store.language === 'bn' ? 'অ্যাডভান্সড' : 'Advanced')}</button>
         <span className={`save-state ${store.saveState}`}>{store.saveState === 'saved' ? t.saved : t.saving}</span>
         <div className="tool-pair"><IconButton title="Undo" onClick={store.undo} disabled={!store.past.length}><Undo2 /></IconButton><IconButton title="Redo" onClick={store.redo} disabled={!store.future.length}><Redo2 /></IconButton></div>
         <IconButton title={t.photo} onClick={takePhoto}><Camera /></IconButton>
@@ -69,7 +73,7 @@ function App() {
       </div>
     </header>
 
-    <section className="workspace">
+    <section className={`workspace ${advanced ? 'advanced' : 'guided'} ${selected ? 'has-selection' : ''}`}>
       <aside className="panel left-panel">
         <PanelTitle icon={<Box />} text={t.objects} />
         <div className="catalog">
@@ -82,7 +86,9 @@ function App() {
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={e.id === store.selectedId ? 'selected' : ''} onClick={() => store.select(e.id)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
       </aside>
 
-      <section className="viewport"><TerrariumCanvas /><div className="viewport-hint">{t.tip}</div><div className="scanline" /></section>
+      <section className="viewport"><TerrariumCanvas />
+        <div className="guided-environment"><button className={store.environment.mode === 'day' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'day' })}><Sun />{t.day}</button><button className={store.environment.mode === 'night' ? 'active' : ''} onClick={() => store.setEnvironment({ mode: 'night' })}><Moon />{t.night}</button></div>
+        <div className="viewport-hint">{t.tip}</div><div className="scanline" /></section>
 
       <aside className="panel right-panel">
         <PanelTitle icon={<Sparkles />} text={t.environment} />

@@ -1,7 +1,7 @@
 {
   "name": "kachmohol-2099",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "GPL-3.0-only",
   "scripts": {
@@ -13,8 +13,10 @@
   "dependencies": {
     "@react-three/drei": "^10.7.6",
     "@react-three/fiber": "^9.3.0",
+    "@react-three/postprocessing": "^3.1.1",
     "dexie": "^4.2.0",
     "lucide-react": "^0.544.0",
+    "postprocessing": "^6.39.5",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "three": "^0.180.0",
