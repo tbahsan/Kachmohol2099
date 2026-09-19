@@ -1,0 +1,14 @@
+{
+  "name": "কাচমহল ২০৯৯ · Kachmohol 2099",
+  "short_name": "Kachmohol",
+  "description": "A futuristic zero-gravity creative ecosystem builder.",
+  "start_url": "/Kachmohol2099/",
+  "scope": "/Kachmohol2099/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#02050c",
+  "theme_color": "#07111f",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

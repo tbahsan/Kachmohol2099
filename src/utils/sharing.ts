@@ -1,0 +1,8 @@
+import type { ProjectData } from '../store/useKachmoholStore'
+const toBase64Url=(bytes:Uint8Array)=>{let binary='';for(let index=0;index<bytes.length;index+=0x8000)binary+=String.fromCharCode(...bytes.subarray(index,index+0x8000));return btoa(binary).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')}
+const fromBase64Url=(value:string)=>{const normalized=value.replaceAll('-','+').replaceAll('_','/');const binary=atob(normalized+'='.repeat((4-normalized.length%4)%4));return Uint8Array.from(binary,char=>char.charCodeAt(0))}
+async function compress(bytes:Uint8Array){if(!('CompressionStream'in window))return bytes;const stream=new Blob([bytes as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw'));return new Uint8Array(await new Response(stream).arrayBuffer())}
+async function decompress(bytes:Uint8Array){if(!('DecompressionStream'in window))return bytes;const stream=new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return new Uint8Array(await new Response(stream).arrayBuffer())}
+export async function encodeScene(data:ProjectData){const bytes=new TextEncoder().encode(JSON.stringify(data));const supported='CompressionStream'in window;const packed=supported?await compress(bytes):bytes;return`${supported?'d':'j'}${toBase64Url(packed)}`}
+export async function decodeScene(value:string){const mode=value[0],bytes=fromBase64Url(value.slice(1));const unpacked=mode==='d'?await decompress(bytes):bytes;return JSON.parse(new TextDecoder().decode(unpacked)) as ProjectData}
+export function sceneUrl(payload:string){const url=new URL(location.href);url.hash=`scene=${payload}`;url.search='';return url.toString()}

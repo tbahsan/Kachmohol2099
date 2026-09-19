@@ -1,0 +1,5 @@
+[
+  {"id":"aurora-garden","title":{"en":"Aurora Garden","bn":"অরোরা উদ্যান"},"description":{"en":"A balanced luminous garden for calm study sessions.","bn":"শান্ত পড়াশোনার জন্য ভারসাম্যপূর্ণ আলোকিত উদ্যান।"},"template":"garden","accent":"#55efb1"},
+  {"id":"abyssal-observatory","title":{"en":"Abyssal Observatory","bn":"অ্যাবিসাল অবজারভেটরি"},"description":{"en":"Crystals, artificial life, and a deep galactic night.","bn":"ক্রিস্টাল, কৃত্রিম প্রাণ এবং গভীর গ্যালাক্টিক রাত্রি।"},"template":"abyss","accent":"#8a6dff"},
+  {"id":"harmonic-machine","title":{"en":"Harmonic Machine","bn":"হারমোনিক মেশিন"},"description":{"en":"A generated energy habitat with resonant technology.","bn":"অনুরণিত প্রযুক্তির generated energy habitat।"},"template":"cosmic","accent":"#55dfff"}
+]

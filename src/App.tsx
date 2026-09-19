@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Activity, BookOpen, Box, Camera, ChevronRight, CircleDot, Copy, Download, FlipHorizontal, Folder, FolderOpen, Grid3X3, Headphones, Heart, Home, Image, Languages, Layers, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Pause, Play, Plus, Redo2, RefreshCw, Rotate3D, Scale3D, Sparkles, Sun, Timer, Trash2, Trophy, Undo2, Upload, WandSparkles, Wind, X } from 'lucide-react'
+import { Activity, BookOpen, Box, Camera, ChevronRight, CircleDot, Copy, Download, DownloadCloud, FlipHorizontal, Folder, FolderOpen, Grid3X3, Headphones, Heart, Home, Image, Languages, Layers, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Pause, Play, Plus, Redo2, RefreshCw, Rotate3D, Scale3D, Share2, Sparkles, Sun, Timer, Trash2, Trophy, Undo2, Upload, UserRound, WandSparkles, WifiOff, Wind, X } from 'lucide-react'
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
@@ -7,8 +7,13 @@ import { getObjectDefinition, objectCatalog } from './catalog/objects'
 import { achievementCatalog, calculateAchievements, calculateEcosystem } from './simulation/ecosystem'
 import { deleteLocalProject, duplicateLocalProject, listLocalProjects, listRecovery, loadLocal, saveLocal, saveRecovery, saveThumbnail, type RecoverySnapshot, type SavedProject } from './storage/database'
 import { proceduralAudio } from './audio/proceduralAudio'
+import { decodeScene, encodeScene, sceneUrl } from './utils/sharing'
+import { registerPwa } from './pwa/register'
+import QRCode from 'qrcode'
 import './styles/app.css'
 
+type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>}
+type GalleryItem={id:string;title:{en:string;bn:string};description:{en:string;bn:string};template:'garden'|'abyss'|'cosmic';accent:string}
 function IconButton({ title, onClick, disabled, active, children }: { title: string; onClick: () => void; disabled?: boolean; active?: boolean; children: React.ReactNode }) {
   return <button className={`icon-button ${active ? 'active' : ''}`} title={title} aria-label={title} onClick={onClick} disabled={disabled}>{children}</button>
 }
@@ -23,6 +28,7 @@ function App() {
   const achievements = calculateAchievements(store.entities, ecosystem)
   const discoveredTypes = new Set(store.entities.filter(entity => (entity.interactionCount ?? 0) > 0).map(entity => entity.type))
   const inputRef = useRef<HTMLInputElement>(null)
+  const profileRef = useRef<HTMLInputElement>(null)
   const [welcome, setWelcome] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
   const [advanced, setAdvanced] = useState(false)
@@ -37,6 +43,12 @@ function App() {
   const [snapshots, setSnapshots] = useState<RecoverySnapshot[]>([])
   const [creativeOpen, setCreativeOpen] = useState(false)
   const [zenOpen, setZenOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareLink, setShareLink] = useState('')
+  const [qrCode, setQrCode] = useState('')
+  const [gallery, setGallery] = useState<GalleryItem[]>([])
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent|null>(null)
   const [audioOn, setAudioOn] = useState(false)
   const [audioLevels, setAudioLevels] = useState({rain:.22,wind:.16,hum:.1,chime:.18})
   const [focusSeconds, setFocusSeconds] = useState(25*60)
@@ -51,7 +63,9 @@ function App() {
   const primaryName = store.language === 'bn' ? 'কাচমহল ২০৯৯' : 'Kachmohol 2099'
   const alternateName = store.language === 'bn' ? 'KACHMOHOL 2099' : 'কাচমহল ২০৯৯'
 
-  useEffect(() => { loadLocal().then(data => data && store.loadProject(data)).catch(console.warn) }, [])
+  useEffect(() => {
+    const initialize=async()=>{try{const sceneHash=location.hash.startsWith('#scene=')?location.hash.slice(7):'';if(sceneHash){const shared=await decodeScene(sceneHash);shared.projectMeta={...shared.projectMeta,id:crypto.randomUUID(),title:`${shared.projectMeta.title} · Shared Copy`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};store.loadProject(shared);setNotice(store.language==='bn'?'Shared scene নতুন project হিসেবে খোলা হয়েছে':'Shared scene opened as a new project')}else{const data=await loadLocal();if(data)store.loadProject(data)}const response=await fetch(`${import.meta.env.BASE_URL}gallery.json`);if(response.ok)setGallery(await response.json())}catch(error){console.warn(error);setNotice(store.language==='bn'?'Shared scene খোলা যায়নি':'Could not open the shared scene')}};initialize();registerPwa(()=>setUpdateAvailable(true));const install=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent)};window.addEventListener('beforeinstallprompt',install);return()=>window.removeEventListener('beforeinstallprompt',install)
+  }, [])
   useEffect(() => {
     const open = () => setInspectorOpen(true)
     window.addEventListener('kachmohol-open-inspector', open)
@@ -119,6 +133,13 @@ function App() {
   const copyProject=async(project:SavedProject)=>{await duplicateLocalProject(project);await refreshProjects()}
   const restoreSnapshot=(snapshot:RecoverySnapshot)=>{store.loadProject(snapshot.data);setProjectOpen(false);setNotice(store.language==='bn'?'পূর্ববর্তী সংস্করণ ফিরিয়ে আনা হয়েছে':'Recovery snapshot restored')}
   const chooseCamera=(name:string)=>setCameraPreset(`${name}:${Date.now()}`)
+  const openShare=async()=>{const payload=await encodeScene(store.serialize());const link=sceneUrl(payload);if(link.length>12000){setShareLink('');setQrCode('');setNotice(store.language==='bn'?'Scene link-এর জন্য খুব বড়—JSON Export ব্যবহার করুন':'Scene is too large for a URL—use JSON Export')}else{setShareLink(link);setQrCode(await QRCode.toDataURL(link,{width:240,margin:1,color:{dark:'#07111fff',light:'#eaffffff'}}))}setShareOpen(true)}
+  const copyShare=async()=>{if(!shareLink)return;await navigator.clipboard.writeText(shareLink);setNotice(store.language==='bn'?'Share link কপি হয়েছে':'Share link copied')}
+  const exportProfile=()=>{const profile={version:1,exportedAt:new Date().toISOString(),language:store.language,achievements:JSON.parse(localStorage.getItem('kachmohol-achievements')||'[]'),focusSessions:Number(localStorage.getItem('kachmohol-focus-sessions')||0),audioLevels,reducedMotion};const blob=new Blob([JSON.stringify(profile,null,2)],{type:'application/json'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='kachmohol-profile.json';link.click();URL.revokeObjectURL(link.href)}
+  const importProfile=async(file?:File)=>{if(!file)return;try{const profile=JSON.parse(await file.text());if(!Array.isArray(profile.achievements))throw new Error();localStorage.setItem('kachmohol-achievements',JSON.stringify(profile.achievements));localStorage.setItem('kachmohol-focus-sessions',String(Number(profile.focusSessions)||0));if(profile.language==='bn'||profile.language==='en')store.setLanguage(profile.language);if(profile.audioLevels)setAudioLevels(profile.audioLevels);setReducedMotion(Boolean(profile.reducedMotion));setNotice(store.language==='bn'?'Profile restore হয়েছে':'Profile restored')}catch{setNotice(store.language==='bn'?'Profile file সঠিক নয়':'Invalid profile file')}}
+  const installApp=async()=>{if(!installPrompt)return;await installPrompt.prompt();await installPrompt.userChoice;setInstallPrompt(null)}
+  const openGalleryItem=(item:GalleryItem)=>{if(item.template==='cosmic')store.generateScene('cosmic');else store.newProject(item.template);setShareOpen(false);setHomeOpen(false)}
+  const applyUpdate=async()=>{const registration=await navigator.serviceWorker.getRegistration();registration?.waiting?.postMessage('SKIP_WAITING');location.reload()}
   const closeWelcome = () => { sessionStorage.setItem('kachmohol-entered', '1'); setWelcome(false) }
   const beginProject = (template: 'empty' | 'garden' | 'abyss') => { store.newProject(template); setHomeOpen(false); setPendingType(null); setInspectorOpen(false); if (template === 'empty') setWelcome(true) }
   const addSmart = (type: EntityType) => {
@@ -148,6 +169,8 @@ function App() {
         <button className="text-button" onClick={exportProject}><Download /> {t.export}</button>
         <button className="text-button" onClick={() => inputRef.current?.click()}><Upload /> {t.import}</button>
         <input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={e => importProject(e.target.files?.[0])} />
+        <button className="text-button share-top" onClick={openShare}><Share2 /> {store.language==='bn'?'শেয়ার':'Share'}</button>
+        {installPrompt&&<IconButton title={store.language==='bn'?'অ্যাপ ইনস্টল':'Install app'} onClick={installApp}><DownloadCloud/></IconButton>}
         <button className="language" onClick={() => store.setLanguage(store.language === 'bn' ? 'en' : 'bn')}><Languages /> {store.language === 'bn' ? 'EN' : 'বাংলা'}</button>
       </div>
     </header>
@@ -203,6 +226,7 @@ function App() {
       <a className="author-credit" href="https://github.com/tbahsan" target="_blank" rel="noreferrer">Created by tbahsan</a>
       <button className="harmony" onClick={() => setEcosystemOpen(true)}><i />{ecosystem.stability}% · {store.language==='bn'?(ecosystem.mood==='harmonious'?'সুরেলা ভারসাম্য':ecosystem.mood==='growing'?'বিকাশমান':'শান্ত'):(ecosystem.mood==='harmonious'?'HARMONIOUS':ecosystem.mood==='growing'?'GROWING':'QUIET')}</button>
     </footer>
+    {updateAvailable&&<div className="pwa-update"><DownloadCloud/><span><b>{store.language==='bn'?'নতুন সংস্করণ প্রস্তুত':'A new version is ready'}</b><small>{store.language==='bn'?'Offline cache আপডেট করতে reload করুন।':'Reload to update the offline app.'}</small></span><button onClick={applyUpdate}>Update</button><button onClick={()=>setUpdateAvailable(false)}><X/></button></div>}
 
     {relaxMode && <div className="relax-overlay"><div><strong>{primaryName}</strong><small>{store.environment.mode === 'day' ? t.day : t.night} · {store.entities.length} artifacts</small></div><a href="https://github.com/tbahsan" target="_blank" rel="noreferrer">by tbahsan</a><span className="relax-controls"><button className={cinematic?'active':''} onClick={()=>setCinematic(value=>!value)}><Camera/>{store.language==='bn'?'সিনেমাটিক':'Cinematic'}</button><button onClick={exitRelax}><Minimize2 />{store.language === 'bn' ? 'বের হন' : 'Exit'}</button></span></div>}
     {ecosystemOpen && <div className="dashboard-backdrop" onMouseDown={event => { if(event.target===event.currentTarget)setEcosystemOpen(false) }}><section className="ecosystem-dashboard">
@@ -219,6 +243,7 @@ function App() {
       <section><h3><Heart/>{store.language==='bn'?'শ্বাস ও চলন':'Breathing & motion'}</h3><button className="breathing-start" onClick={()=>{setBreathing(true);setZenOpen(false)}}><Wind/><span><b>4 · 4 · 6</b><small>{store.language==='bn'?'শ্বাসের নির্দেশনা':'Guided breathing'}</small></span></button><label className="toggle wide"><span>{store.language==='bn'?'কম চলন':'Reduced motion'}</span><input type="checkbox" checked={reducedMotion} onChange={event=>setReducedMotion(event.target.checked)}/><i/></label><label className="toggle wide"><span>{store.language==='bn'?'সিনেমাটিক ট্যুর':'Cinematic tour'}</span><input type="checkbox" checked={cinematic} onChange={event=>setCinematic(event.target.checked)}/><i/></label></section>
       <section><h3><Image/>{store.language==='bn'?'ওয়ালপেপার':'Wallpaper studio'}</h3><div className="wallpaper-grid"><button onClick={()=>downloadWallpaper(1920,1080,'desktop-hd')}>Desktop<small>1920 × 1080</small></button><button onClick={()=>downloadWallpaper(1440,2560,'mobile')}>Mobile<small>1440 × 2560</small></button><button onClick={()=>downloadWallpaper(2048,2048,'square')}>Square<small>2048 × 2048</small></button><button onClick={takePhoto}>Viewport<small>Current size</small></button></div></section></div>
     </section></div>}
+    {shareOpen && <div className="dashboard-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setShareOpen(false)}}><section className="share-studio"><header><div><small>SHARE & OFFLINE</small><h2>{store.language==='bn'?'কাচমহল শেয়ার করুন':'Share your Kachmohol'}</h2></div><button onClick={()=>setShareOpen(false)}><X/></button></header><div className="share-grid"><section><h3><Share2/>{store.language==='bn'?'Scene link':'Scene link'}</h3>{shareLink?<><img className="qr-code" src={qrCode} alt="QR code for shared scene"/><textarea readOnly value={shareLink}/><button className="copy-link" onClick={copyShare}><Copy/>{store.language==='bn'?'লিংক কপি করুন':'Copy share link'}</button><p>{store.language==='bn'?'লিংক খুললে scene একটি নতুন local project হিসেবে তৈরি হবে।':'Opening this link creates a new local project; it never overwrites current work.'}</p></>:<div className="share-too-large"><WifiOff/><p>{store.language==='bn'?'এই scene URL-এর জন্য বড়। উপরের Export button দিয়ে JSON file শেয়ার করুন।':'This scene is too large for a URL. Share it with the JSON Export button.'}</p></div>}</section><section><h3><UserRound/>{store.language==='bn'?'Profile backup':'Profile backup'}</h3><p>{store.language==='bn'?'Achievements, focus count, language ও Zen settings backup করুন।':'Back up achievements, focus count, language, and Zen preferences.'}</p><div className="profile-actions"><button onClick={exportProfile}><Download/>Export Profile</button><button onClick={()=>profileRef.current?.click()}><Upload/>Import Profile</button><input ref={profileRef} hidden type="file" accept="application/json,.json" onChange={event=>importProfile(event.target.files?.[0])}/></div>{installPrompt&&<button className="install-card" onClick={installApp}><DownloadCloud/><span><b>{store.language==='bn'?'Kachmohol ইনস্টল করুন':'Install Kachmohol'}</b><small>{store.language==='bn'?'Home screen থেকে offline-এ খুলুন':'Open from your home screen and use offline'}</small></span></button>}</section></div><div className="gallery-section"><h3>{store.language==='bn'?'কমিউনিটি গ্যালারি':'Curated community gallery'}</h3><div>{gallery.map(item=><button key={item.id} style={{'--accent':item.accent} as React.CSSProperties} onClick={()=>openGalleryItem(item)}><Sparkles/><span><b>{item.title[store.language]}</b><small>{item.description[store.language]}</small></span><ChevronRight/></button>)}</div><p>{store.language==='bn'?'Gallery static ও curated; নতুন template GitHub pull request-এর মাধ্যমে যোগ করা যাবে।':'The gallery is static and curated; contributors can submit templates through GitHub pull requests.'}</p></div></section></div>}
     {projectOpen && <div className="dashboard-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setProjectOpen(false)}}><section className="project-manager">
       <header><div><small>LOCAL WORKSPACE</small><h2>{store.language==='bn'?'আমার কাচমহল':'My Projects'}</h2></div><button onClick={()=>setProjectOpen(false)}><X/></button></header>
       <div className="project-current"><label>{store.language==='bn'?'বর্তমান প্রজেক্ট':'Current project'}<input value={store.projectMeta.title} onChange={event=>store.renameProject(event.target.value)}/></label><button onClick={()=>{store.newProject('empty');setProjectOpen(false);setHomeOpen(false)}}><Plus/>{store.language==='bn'?'নতুন ডোম':'New Dome'}</button></div>
