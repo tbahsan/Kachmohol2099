@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Box, Camera, ChevronRight, Copy, Download, FolderOpen, Home, Languages, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Plus, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { Activity, BookOpen, Box, Camera, ChevronRight, Copy, Download, FolderOpen, Home, Languages, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Plus, Redo2, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Trophy, Undo2, Upload, X } from 'lucide-react'
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
 import { getObjectDefinition, objectCatalog } from './catalog/objects'
+import { achievementCatalog, calculateAchievements, calculateEcosystem } from './simulation/ecosystem'
 import { loadLocal, saveLocal } from './storage/database'
 import './styles/app.css'
 
@@ -16,8 +17,10 @@ function App() {
   const t = translations[store.language]
   const selected = store.entities.find(e => e.id === store.selectedId)
   const selectedDefinition = selected ? getObjectDefinition(selected.type) : null
-  const impacts = store.entities.reduce((total, entity) => { const definition=getObjectDefinition(entity.type); return { oxygen:total.oxygen+definition.oxygen, power:total.power+definition.power, humidity:total.humidity+definition.humidity } }, {oxygen:45,power:45,humidity:45})
-  const stats = { oxygen:Math.max(0,Math.min(100,impacts.oxygen)), power:Math.max(0,Math.min(100,impacts.power)), humidity:Math.max(0,Math.min(100,impacts.humidity)) }
+  const ecosystem = calculateEcosystem(store.entities, store.environment.mode)
+  const stats = ecosystem
+  const achievements = calculateAchievements(store.entities, ecosystem)
+  const discoveredTypes = new Set(store.entities.filter(entity => (entity.interactionCount ?? 0) > 0).map(entity => entity.type))
   const inputRef = useRef<HTMLInputElement>(null)
   const [welcome, setWelcome] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
@@ -26,6 +29,8 @@ function App() {
   const [pendingType, setPendingType] = useState<EntityType | null>(null)
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [ecosystemOpen, setEcosystemOpen] = useState(false)
+  const [ecosystemTab, setEcosystemTab] = useState<'status' | 'codex' | 'achievements'>('status')
   const [notice, setNotice] = useState('')
   const primaryName = store.language === 'bn' ? 'কাচমহল ২০৯৯' : 'Kachmohol 2099'
   const alternateName = store.language === 'bn' ? 'KACHMOHOL 2099' : 'কাচমহল ২০৯৯'
@@ -40,6 +45,16 @@ function App() {
     const timer = window.setTimeout(async () => { await saveLocal(store.serialize()); store.markSaved() }, 700)
     return () => clearTimeout(timer)
   }, [store.entities, store.environment])
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem('kachmohol-achievements') || '[]') as string[]
+    const fresh = achievements.filter(id => !saved.includes(id))
+    if (fresh.length) { const item=achievementCatalog[fresh[0] as keyof typeof achievementCatalog]; setNotice(`${store.language==='bn'?'অর্জন':'Achievement'}: ${store.language==='bn'?item.bn:item.en}`); localStorage.setItem('kachmohol-achievements',JSON.stringify([...new Set([...saved,...achievements])])) }
+  }, [achievements.join('|')])
+  useEffect(() => {
+    if (store.entities.length < 3) return
+    const timer=window.setInterval(() => { const messages=ecosystem.stability>75 ? (store.language==='bn'?['একটি নরম অরোরা হ্যাবিট্যাট ছুঁয়ে গেল।','আলোক-বীজ বাতাসে ভেসে উঠেছে।']:['A soft aurora passed through the habitat.','Luminous spores drift through the air.']) : (store.language==='bn'?['হ্যাবিট্যাট শান্তভাবে নতুন ভারসাম্য খুঁজছে।']:['The habitat is gently seeking a new balance.']); setNotice(messages[Math.floor(Math.random()*messages.length)]) },45000)
+    return () => clearInterval(timer)
+  }, [store.entities.length, ecosystem.stability, store.language])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -113,7 +128,7 @@ function App() {
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={e.id === store.selectedId ? 'selected' : ''} onClick={() => store.select(e.id)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
       </aside>
 
-      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} relax={relaxMode} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
+      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} relax={relaxMode} stability={ecosystem.stability} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
         {!advanced && !pendingType && <div className="guided-create-tray">
           <button className="add-object-button" onClick={() => setCatalogOpen(true)}><Plus /><span><b>{store.language === 'bn' ? 'অবজেক্ট যোগ করুন' : 'Add object'}</b><small>{store.language === 'bn' ? 'উদ্ভিদ, ক্রিস্টাল ও প্রযুক্তি' : 'Nature, crystals and technology'}</small></span></button>
           {selected && <>
@@ -149,10 +164,17 @@ function App() {
     <footer className="statusbar">
       <Meter label={t.oxygen} value={stats.oxygen} color="#65ffd1" /><Meter label={t.power} value={stats.power} color="#65c7ff" /><Meter label={t.humidity} value={stats.humidity} color="#c27bff" />
       <a className="author-credit" href="https://github.com/tbahsan" target="_blank" rel="noreferrer">Created by tbahsan</a>
-      <div className="harmony"><i />{t.harmony}</div>
+      <button className="harmony" onClick={() => setEcosystemOpen(true)}><i />{ecosystem.stability}% · {store.language==='bn'?(ecosystem.mood==='harmonious'?'সুরেলা ভারসাম্য':ecosystem.mood==='growing'?'বিকাশমান':'শান্ত'):(ecosystem.mood==='harmonious'?'HARMONIOUS':ecosystem.mood==='growing'?'GROWING':'QUIET')}</button>
     </footer>
 
     {relaxMode && <div className="relax-overlay"><div><strong>{primaryName}</strong><small>{store.environment.mode === 'day' ? t.day : t.night} · {store.entities.length} artifacts</small></div><a href="https://github.com/tbahsan" target="_blank" rel="noreferrer">by tbahsan</a><button onClick={exitRelax}><Minimize2 />{store.language === 'bn' ? 'বের হন' : 'Exit'}</button></div>}
+    {ecosystemOpen && <div className="dashboard-backdrop" onMouseDown={event => { if(event.target===event.currentTarget)setEcosystemOpen(false) }}><section className="ecosystem-dashboard">
+      <header><div><small>LIVING SYSTEM</small><h2>{store.language==='bn'?'কাচমহল পর্যবেক্ষণ':'Habitat Observatory'}</h2></div><button onClick={() => setEcosystemOpen(false)}><X /></button></header>
+      <nav><button className={ecosystemTab==='status'?'active':''} onClick={()=>setEcosystemTab('status')}><Activity />{store.language==='bn'?'অবস্থা':'Status'}</button><button className={ecosystemTab==='codex'?'active':''} onClick={()=>setEcosystemTab('codex')}><BookOpen />Codex</button><button className={ecosystemTab==='achievements'?'active':''} onClick={()=>setEcosystemTab('achievements')}><Trophy />{store.language==='bn'?'অর্জন':'Achievements'}</button></nav>
+      {ecosystemTab==='status' && <div className="dashboard-content"><div className="stability-hero"><div style={{'--stability':`${ecosystem.stability*3.6}deg`} as React.CSSProperties}><strong>{ecosystem.stability}%</strong><small>STABILITY</small></div><span><b>{ecosystem.mood.toUpperCase()}</b><small>{store.language==='bn'?'কঠিন failure নেই—পরামর্শ অনুসরণ করে ভারসাম্য উন্নত করুন।':'There is no hard failure—follow gentle suggestions to improve balance.'}</small></span></div><div className="dashboard-meters"><Meter label={t.oxygen} value={stats.oxygen} color="#65ffd1"/><Meter label={t.power} value={stats.power} color="#65c7ff"/><Meter label={t.humidity} value={stats.humidity} color="#c27bff"/></div><h3>{store.language==='bn'?'আবিষ্কৃত Synergy':'Discovered synergies'}</h3><div className="synergy-list">{ecosystem.synergies.length?ecosystem.synergies.map(item=><div key={item.id}><Sparkles/><span><b>{store.language==='bn'?item.bn:item.en}</b><small>{item.bonus}</small></span></div>):<p>{store.language==='bn'?'সম্পর্কিত object একসঙ্গে রাখলে synergy আবিষ্কার হবে।':'Combine related artifacts to discover synergies.'}</p>}</div><h3>{store.language==='bn'?'কোমল পরামর্শ':'Gentle suggestion'}</h3><p className="recommendation">{ecosystem.recommendations[0][store.language]}</p></div>}
+      {ecosystemTab==='codex' && <div className="dashboard-content codex-grid">{objectCatalog.map(item=><article key={item.type} className={discoveredTypes.has(item.type)?'discovered':'undiscovered'}><div><Sparkles/></div><small>{item.category}</small><h3>{discoveredTypes.has(item.type)?item.name[store.language]:'???'}</h3><p>{discoveredTypes.has(item.type)?item.description[store.language]:(store.language==='bn'?'Dome-এ object-এর সঙ্গে interact করে আবিষ্কার করুন।':'Interact with this artifact in the dome to discover it.')}</p></article>)}</div>}
+      {ecosystemTab==='achievements' && <div className="dashboard-content achievement-grid">{Object.entries(achievementCatalog).map(([id,item])=><article key={id} className={achievements.includes(id)?'earned':''}><Trophy/><div><h3>{store.language==='bn'?item.bn:item.en}</h3><p>{store.language==='bn'?item.detailBn:item.detailEn}</p></div><span>{achievements.includes(id)?'✓':'○'}</span></article>)}</div>}
+    </section></div>}
     {homeOpen && <div className="home-hub">
       <div className="home-glow" /><div className="home-content">
         <div className="home-brand"><div className="orb"><Sparkles /></div><small>{alternateName}</small><h1>{primaryName}</h1><p>{store.language === 'bn' ? 'আপনার নিজস্ব জীবন্ত কাচের জগৎ গড়ে তুলুন' : 'Create your own living world of glass and light'}</p></div>

@@ -16,7 +16,7 @@
 
 Kachmohol 2099 is a browser-based creative sandbox where you shape a luminous biodome with synthetic flora, neon crystals, and anti-gravity technology. It runs entirely in your browser and requires no account or server.
 
-### Version 6 prototype
+### Version 7 — Living Ecosystem
 
 - Premium transmissive glass biodome with adaptive solarpunk day and bioluminescent night
 - Cinematic bloom, vignette, contact shadows, layered habitat, foliage, particles, and PBR materials
@@ -33,7 +33,13 @@ Kachmohol 2099 is a browser-based creative sandbox where you shape a luminous bi
 - Ten data-driven artifacts across Nature, Energy, and Life categories
 - Discoverable descriptions, ecosystem impact values, and named interactions
 - Reactive artifact animation when an interaction is triggered
-- Dynamic Oxygen, Power, and Humidity values based on scene contents
+- Dynamic Oxygen, Power, Humidity, Biodiversity, and Stability simulation
+- Six discoverable cross-object synergies with contextual bonuses
+- Gentle balance recommendations and non-punitive ecosystem moods
+- Living System observatory with Status, Codex, and Achievements tabs
+- Ten-entry discovery Codex revealed through object interactions
+- Six persistent local achievements and gentle ambient events
+- Environment particle density and lighting react to ecosystem stability
 - Full 360-degree camera orbit and a designed energy underside
 - Omnidirectional day cloud ring and spherical Milky Way background
 - Non-blocking side catalog that keeps the dome sharp and visible

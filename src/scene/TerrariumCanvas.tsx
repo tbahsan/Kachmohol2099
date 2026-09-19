@@ -174,7 +174,7 @@ function PlacementSurface({ type, onPlace }: { type: EntityType; onPlace: (posit
   </>
 }
 
-function World({ pendingType, onPlace, advanced, relax }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean }) {
+function World({ pendingType, onPlace, advanced, relax, stability }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number }) {
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
@@ -182,13 +182,13 @@ function World({ pendingType, onPlace, advanced, relax }: { pendingType: EntityT
   return <>
     <color attach="background" args={[isDay ? '#6f98a1' : '#01040b']} />
     <fog attach="fog" args={[isDay ? '#5d9bb2' : '#030713', isDay ? 28 : 14, isDay ? 70 : 44]} />
-    <ambientLight intensity={isDay ? 1.4 : .32} />
+    <ambientLight intensity={(isDay ? 1.4 : .32) * (.72 + stability/360)} />
     <hemisphereLight intensity={isDay ? 2.1 : .55} color={isDay?'#fff4d5':'#7ccfff'} groundColor={isDay?'#325843':'#061323'} />
     <directionalLight castShadow position={[4, 7, 5]} intensity={isDay ? 3.8 : .5} color={isDay ? '#fff0c2' : '#8cc8ff'} shadow-mapSize={[1024,1024]} />
     <pointLight position={[-3, 1, 2]} intensity={isDay?4:18} color={isDay?'#ffd59c':'#24dfff'} distance={9} />
     <pointLight position={[3, -1, -2]} intensity={isDay?2:14} color="#d43cff" distance={8} />
     {isDay ? <DaySky /> : <NightSky />}
-    <Sparkles count={isDay?45:95} scale={[6,5,5]} size={isDay?1.6:2.5} speed={.18} opacity={isDay?.3:.65} color={isDay?'#f7e8b2':env.auraColor} />
+    <Sparkles count={(isDay?35:70)+Math.round(stability*.45)} scale={[6,5,5]} size={isDay?1.6:2.5} speed={.18} opacity={isDay?.3:.65} color={isDay?'#f7e8b2':env.auraColor} />
     <group onPointerMissed={() => select(null)}>
       <mesh><sphereGeometry args={[3.55, 96, 64]} /><MeshTransmissionMaterial backside color={isDay?'#d9fff0':env.auraColor} transmission={.96} thickness={.18} roughness={.08} chromaticAberration={.025} anisotropy={.1} distortion={.04} distortionScale={.16} temporalDistortion={.02} transparent opacity={.25} /></mesh>
       <mesh rotation={[0,0,.02]}><torusGeometry args={[3.52,.018,12,160]} /><meshBasicMaterial color={env.auraColor} transparent opacity={.72} toneMapped={false} /></mesh>
@@ -201,8 +201,8 @@ function World({ pendingType, onPlace, advanced, relax }: { pendingType: EntityT
   </>
 }
 
-export function TerrariumCanvas({ pendingType, onPlace, advanced, relax }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean }) {
+export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} /></Suspense>
   </Canvas>
 }
