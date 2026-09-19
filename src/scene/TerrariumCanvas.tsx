@@ -113,10 +113,10 @@ function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
     update(entity.id, { position: object.position.toArray() as [number, number, number], rotation: [object.rotation.x, object.rotation.y, object.rotation.z], scale: object.scale.toArray() as [number, number, number] })
   }}>{group}</TransformControls>
 }
-function DaySky() {
+function DaySky({ reducedMotion }: { reducedMotion: boolean }) {
   const clouds = useRef<THREE.Group>(null)
   const sun = useRef<THREE.Group>(null)
-  useFrame((_, delta) => { if (clouds.current) clouds.current.rotation.y += delta*.018; if(sun.current) sun.current.rotation.y-=delta*.01 })
+  useFrame((_, delta) => { if(reducedMotion)return; if (clouds.current) clouds.current.rotation.y += delta*.018; if(sun.current) sun.current.rotation.y-=delta*.01 })
   const cloudLocations=useMemo(()=>Array.from({length:12},(_,i)=>{const angle=i/12*Math.PI*2;const radius=13+(i%3);return [Math.cos(angle)*radius,1.5+(i%4)*1.15,Math.sin(angle)*radius] as [number,number,number]}),[])
   return <>
     <mesh scale={38}><sphereGeometry args={[1,48,24]} /><shaderMaterial side={THREE.BackSide} depthWrite={false} vertexShader={`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`varying vec3 vPos; void main(){float h=normalize(vPos).y*.5+.5;vec3 low=vec3(.68,.88,.91);vec3 mid=vec3(.28,.66,.79);vec3 high=vec3(.08,.30,.56);vec3 c=mix(low,mid,smoothstep(.12,.62,h));c=mix(c,high,smoothstep(.62,1.0,h));gl_FragColor=vec4(c,1.0);}`} /></mesh>
@@ -126,14 +126,14 @@ function DaySky() {
     </group>)}</group>
   </>
 }
-function NightSky() {
+function NightSky({ reducedMotion }: { reducedMotion: boolean }) {
   const galaxy = useRef<THREE.Points>(null)
   const positions = useMemo(() => {
     const count=2600; const data=new Float32Array(count*3)
     for(let i=0;i<count;i++){const longitude=Math.random()*Math.PI*2;const latitude=Math.sin(longitude*2.0)*.11+(Math.random()-.5)*.28;const radius=22+Math.random()*5;data[i*3]=Math.cos(latitude)*Math.cos(longitude)*radius;data[i*3+1]=Math.sin(latitude)*radius;data[i*3+2]=Math.cos(latitude)*Math.sin(longitude)*radius}
     return data
   },[])
-  useFrame((state,delta)=>{if(galaxy.current){galaxy.current.rotation.y+=delta*.008;const material=galaxy.current.material as THREE.PointsMaterial;material.opacity=.62+Math.sin(state.clock.elapsedTime*.7)*.08}})
+  useFrame((state,delta)=>{if(galaxy.current){if(!reducedMotion)galaxy.current.rotation.y+=delta*.008;const material=galaxy.current.material as THREE.PointsMaterial;material.opacity=reducedMotion?.68:.62+Math.sin(state.clock.elapsedTime*.7)*.08}})
   return <>
     <mesh scale={38}><sphereGeometry args={[1,48,24]} /><meshBasicMaterial side={THREE.BackSide} color="#01040d" /></mesh>
     <points ref={galaxy} rotation={[.25,0,.35]}><bufferGeometry><bufferAttribute attach="attributes-position" args={[positions,3]} /></bufferGeometry><pointsMaterial color="#a8c9ff" size={.075} transparent opacity={.68} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} /></points>
@@ -181,13 +181,20 @@ function CameraDirector({ preset }: { preset: string }) {
   return null
 }
 
-function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string }) {
+function CinematicCamera({ active, reducedMotion }: { active: boolean; reducedMotion: boolean }) {
+  const { camera }=useThree()
+  useFrame(state=>{if(!active||reducedMotion)return;const time=state.clock.elapsedTime;const radius=7.4+Math.sin(time*.13)*.55;const angle=time*.075;camera.position.set(Math.sin(angle)*radius,.7+Math.sin(time*.18)*1.65,Math.cos(angle)*radius);camera.lookAt(0,-.35,0)})
+  return null
+}
+
+function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset, cinematic, reducedMotion }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string; cinematic: boolean; reducedMotion: boolean }) {
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
   const isDay = env.mode === 'day'
   return <>
     <CameraDirector preset={cameraPreset} />
+    <CinematicCamera active={cinematic} reducedMotion={reducedMotion} />
     <color attach="background" args={[isDay ? '#6f98a1' : '#01040b']} />
     <fog attach="fog" args={[isDay ? '#5d9bb2' : '#030713', isDay ? 28 : 14, isDay ? 70 : 44]} />
     <ambientLight intensity={(isDay ? 1.4 : .32) * (.72 + stability/360)} />
@@ -195,22 +202,22 @@ function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset 
     <directionalLight castShadow position={[4, 7, 5]} intensity={isDay ? 3.8 : .5} color={isDay ? '#fff0c2' : '#8cc8ff'} shadow-mapSize={[1024,1024]} />
     <pointLight position={[-3, 1, 2]} intensity={isDay?4:18} color={isDay?'#ffd59c':'#24dfff'} distance={9} />
     <pointLight position={[3, -1, -2]} intensity={isDay?2:14} color="#d43cff" distance={8} />
-    {isDay ? <DaySky /> : <NightSky />}
-    <Sparkles count={(isDay?35:70)+Math.round(stability*.45)} scale={[6,5,5]} size={isDay?1.6:2.5} speed={.18} opacity={isDay?.3:.65} color={isDay?'#f7e8b2':env.auraColor} />
+    {isDay ? <DaySky reducedMotion={reducedMotion} /> : <NightSky reducedMotion={reducedMotion} />}
+    <Sparkles count={(isDay?35:70)+Math.round(stability*.45)} scale={[6,5,5]} size={isDay?1.6:2.5} speed={reducedMotion?0:.18} opacity={isDay?.3:.65} color={isDay?'#f7e8b2':env.auraColor} />
     <group onPointerMissed={() => select(null)}>
       <mesh><sphereGeometry args={[3.55, 96, 64]} /><MeshTransmissionMaterial backside color={isDay?'#d9fff0':env.auraColor} transmission={.96} thickness={.18} roughness={.08} chromaticAberration={.025} anisotropy={.1} distortion={.04} distortionScale={.16} temporalDistortion={.02} transparent opacity={.25} /></mesh>
       <mesh rotation={[0,0,.02]}><torusGeometry args={[3.52,.018,12,160]} /><meshBasicMaterial color={env.auraColor} transparent opacity={.72} toneMapped={false} /></mesh>
       <Habitat isDay={isDay} aura={env.auraColor} />
       {pendingType && <PlacementSurface type={pendingType} onPlace={onPlace} />}
-      {entities.map(entity => env.float && ['core','waterOrb','jellyfish','droneBee'].includes(entity.type) ? <Float key={entity.id} speed={1.05} rotationIntensity={.05} floatIntensity={.18}><Artifact entity={entity} advanced={advanced} /></Float> : <Artifact key={entity.id} entity={entity} advanced={advanced} />)}
+      {entities.map(entity => env.float && ['core','waterOrb','jellyfish','droneBee'].includes(entity.type) ? <Float key={entity.id} speed={reducedMotion?0:1.05} rotationIntensity={reducedMotion?0:.05} floatIntensity={reducedMotion?0:.18}><Artifact entity={entity} advanced={advanced} /></Float> : <Artifact key={entity.id} entity={entity} advanced={advanced} />)}
     </group>
-    <OrbitControls makeDefault enableDamping dampingFactor={.055} minDistance={5.8} maxDistance={9.2} maxPolarAngle={Math.PI-.06} minPolarAngle={.06} autoRotate={relax} autoRotateSpeed={.38} enablePan={false} />
+    <OrbitControls makeDefault enabled={!cinematic} enableDamping dampingFactor={.055} minDistance={5.8} maxDistance={9.2} maxPolarAngle={Math.PI-.06} minPolarAngle={.06} autoRotate={relax&&!reducedMotion&&!cinematic} autoRotateSpeed={.38} enablePan={false} />
     <EffectComposer multisampling={0}><Bloom mipmapBlur intensity={isDay?.45:1.25} luminanceThreshold={isDay?.92:.48} radius={.72} /><Vignette eskil={false} offset={.18} darkness={isDay?.35:.66} /></EffectComposer>
   </>
 }
 
-export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability, cameraPreset }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string }) {
+export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability, cameraPreset, cinematic, reducedMotion }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string; cinematic: boolean; reducedMotion: boolean }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} cameraPreset={cameraPreset} /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} cameraPreset={cameraPreset} cinematic={cinematic} reducedMotion={reducedMotion} /></Suspense>
   </Canvas>
 }

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Activity, BookOpen, Box, Camera, ChevronRight, CircleDot, Copy, Download, FlipHorizontal, Folder, FolderOpen, Grid3X3, Home, Languages, Layers, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Plus, Redo2, RefreshCw, Rotate3D, Scale3D, Sparkles, Sun, Trash2, Trophy, Undo2, Upload, WandSparkles, X } from 'lucide-react'
+import { Activity, BookOpen, Box, Camera, ChevronRight, CircleDot, Copy, Download, FlipHorizontal, Folder, FolderOpen, Grid3X3, Headphones, Heart, Home, Image, Languages, Layers, LayoutDashboard, LockKeyhole, Maximize2, Minimize2, Moon, Move3D, Pause, Play, Plus, Redo2, RefreshCw, Rotate3D, Scale3D, Sparkles, Sun, Timer, Trash2, Trophy, Undo2, Upload, WandSparkles, Wind, X } from 'lucide-react'
 import { TerrariumCanvas } from './scene/TerrariumCanvas'
 import { useKachmoholStore, type EntityType, type ProjectData, type TransformMode } from './store/useKachmoholStore'
 import { translations } from './locales/translations'
 import { getObjectDefinition, objectCatalog } from './catalog/objects'
 import { achievementCatalog, calculateAchievements, calculateEcosystem } from './simulation/ecosystem'
 import { deleteLocalProject, duplicateLocalProject, listLocalProjects, listRecovery, loadLocal, saveLocal, saveRecovery, saveThumbnail, type RecoverySnapshot, type SavedProject } from './storage/database'
+import { proceduralAudio } from './audio/proceduralAudio'
 import './styles/app.css'
 
 function IconButton({ title, onClick, disabled, active, children }: { title: string; onClick: () => void; disabled?: boolean; active?: boolean; children: React.ReactNode }) {
@@ -35,6 +36,16 @@ function App() {
   const [projects, setProjects] = useState<SavedProject[]>([])
   const [snapshots, setSnapshots] = useState<RecoverySnapshot[]>([])
   const [creativeOpen, setCreativeOpen] = useState(false)
+  const [zenOpen, setZenOpen] = useState(false)
+  const [audioOn, setAudioOn] = useState(false)
+  const [audioLevels, setAudioLevels] = useState({rain:.22,wind:.16,hum:.1,chime:.18})
+  const [focusSeconds, setFocusSeconds] = useState(25*60)
+  const [focusRunning, setFocusRunning] = useState(false)
+  const [focusLength, setFocusLength] = useState(25)
+  const [breathing, setBreathing] = useState(false)
+  const [breathPhase, setBreathPhase] = useState<'inhale'|'hold'|'exhale'>('inhale')
+  const [cinematic, setCinematic] = useState(false)
+  const [reducedMotion, setReducedMotion] = useState(()=>window.matchMedia?.('(prefers-reduced-motion: reduce)').matches??false)
   const [cameraPreset, setCameraPreset] = useState('front:0')
   const [notice, setNotice] = useState('')
   const primaryName = store.language === 'bn' ? 'কাচমহল ২০৯৯' : 'Kachmohol 2099'
@@ -54,6 +65,9 @@ function App() {
     const timer=window.setInterval(()=>saveRecovery(useKachmoholStore.getState().serialize()).catch(console.warn),30000)
     return()=>clearInterval(timer)
   },[store.projectMeta.id])
+  useEffect(()=>{if(!focusRunning)return;const timer=window.setInterval(()=>setFocusSeconds(value=>Math.max(0,value-1)),1000);return()=>clearInterval(timer)},[focusRunning])
+  useEffect(()=>{if(focusSeconds!==0||!focusRunning)return;setFocusRunning(false);const sessions=Number(localStorage.getItem('kachmohol-focus-sessions')||0)+1;localStorage.setItem('kachmohol-focus-sessions',String(sessions));const angle=store.entities.length*2.1;store.addEntity(sessions%2?'solarFlower':'mushroom',[Math.cos(angle)*1.45,-1.58,Math.sin(angle)*1.45]);setNotice(store.language==='bn'?'Focus session সম্পন্ন—একটি নতুন জীবন ফুটেছে!':'Focus complete—a new life has bloomed!');setFocusSeconds(focusLength*60)},[focusSeconds,focusRunning])
+  useEffect(()=>{if(!breathing)return;let elapsed=0;const timer=window.setInterval(()=>{elapsed=(elapsed+1)%14;setBreathPhase(elapsed<4?'inhale':elapsed<8?'hold':'exhale')},1000);return()=>clearInterval(timer)},[breathing])
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem('kachmohol-achievements') || '[]') as string[]
     const fresh = achievements.filter(id => !saved.includes(id))
@@ -94,6 +108,10 @@ function App() {
     const canvas = document.querySelector('#terrarium-canvas') as HTMLCanvasElement | null
     if (!canvas) return; const a = document.createElement('a'); a.download = 'kachmohol-2099.png'; a.href = canvas.toDataURL('image/png'); a.click()
   }
+  const downloadWallpaper=(width:number,height:number,label:string)=>{const source=document.querySelector('#terrarium-canvas') as HTMLCanvasElement|null;if(!source)return;const output=document.createElement('canvas');output.width=width;output.height=height;const context=output.getContext('2d');if(!context)return;const scale=Math.max(width/source.width,height/source.height);const drawWidth=source.width*scale,drawHeight=source.height*scale;context.fillStyle='#02050c';context.fillRect(0,0,width,height);context.drawImage(source,(width-drawWidth)/2,(height-drawHeight)/2,drawWidth,drawHeight);const link=document.createElement('a');link.download=`kachmohol-${label}.png`;link.href=output.toDataURL('image/png');link.click()}
+  const toggleAudio=async()=>{if(audioOn){await proceduralAudio.pause();setAudioOn(false)}else{await proceduralAudio.start();Object.entries(audioLevels).forEach(([name,value])=>proceduralAudio.setLayer(name as keyof typeof audioLevels,value));setAudioOn(true)}}
+  const changeAudio=(name:keyof typeof audioLevels,value:number)=>{setAudioLevels(levels=>({...levels,[name]:value}));proceduralAudio.setLayer(name,value)}
+  const selectFocus=(minutes:number)=>{setFocusLength(minutes);setFocusSeconds(minutes*60);setFocusRunning(false)}
   const refreshProjects=async()=>{setProjects(await listLocalProjects());setSnapshots(await listRecovery(store.projectMeta.id))}
   const openProjects=async()=>{const canvas=document.querySelector('#terrarium-canvas') as HTMLCanvasElement|null;if(canvas)await saveThumbnail(store.projectMeta.id,canvas.toDataURL('image/jpeg',.6));await refreshProjects();setProjectOpen(true)}
   const openSavedProject=async(id:string)=>{const data=await loadLocal(id);if(data){store.loadProject(data);setProjectOpen(false);setHomeOpen(false)}}
@@ -123,6 +141,7 @@ function App() {
         <IconButton title="Creative Home" onClick={() => setHomeOpen(true)}><Home /></IconButton>
         <button className={`mode-button ${advanced ? 'active' : ''}`} onClick={() => setAdvanced(v => !v)}><LayoutDashboard />{advanced ? (store.language === 'bn' ? 'সহজ মোড' : 'Guided mode') : (store.language === 'bn' ? 'অ্যাডভান্সড' : 'Advanced')}</button>
         <span className={`save-state ${store.saveState}`}>{store.saveState === 'saved' ? t.saved : t.saving}</span>
+        <button className={`zen-button ${audioOn||focusRunning?'active':''}`} onClick={()=>setZenOpen(true)}><Headphones />{store.language==='bn'?'জেন':'Zen'}{focusRunning&&<small>{String(Math.floor(focusSeconds/60)).padStart(2,'0')}:{String(focusSeconds%60).padStart(2,'0')}</small>}</button>
         <button className="relax-button" onClick={enterRelax}><Maximize2 />{store.language === 'bn' ? 'রিল্যাক্স' : 'Relax'}</button>
         <div className="tool-pair"><IconButton title="Undo" onClick={store.undo} disabled={!store.past.length}><Undo2 /></IconButton><IconButton title="Redo" onClick={store.redo} disabled={!store.future.length}><Redo2 /></IconButton></div>
         <IconButton title={t.photo} onClick={takePhoto}><Camera /></IconButton>
@@ -146,7 +165,7 @@ function App() {
         <div className="entity-list">{store.entities.map(e => <button key={e.id} className={store.selectedIds.includes(e.id) ? 'selected' : ''} onClick={event => store.select(e.id,event.shiftKey)}><span className={`dot ${e.type}`} />{e.name}</button>)}</div>
       </aside>
 
-      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} relax={relaxMode} stability={ecosystem.stability} cameraPreset={cameraPreset} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
+      <section className="viewport"><TerrariumCanvas pendingType={pendingType} advanced={advanced} relax={relaxMode} stability={ecosystem.stability} cameraPreset={cameraPreset} cinematic={cinematic} reducedMotion={reducedMotion} onPlace={position => { if (!pendingType) return; store.addEntity(pendingType, position); setPendingType(null); setNotice(store.language === 'bn' ? 'আর্টিফ্যাক্টটি স্থাপন হয়েছে' : 'Artifact placed') }} />
         {!advanced && !pendingType && <div className="guided-create-tray">
           <button className="add-object-button" onClick={() => setCatalogOpen(true)}><Plus /><span><b>{store.language === 'bn' ? 'অবজেক্ট যোগ করুন' : 'Add object'}</b><small>{store.language === 'bn' ? 'উদ্ভিদ, ক্রিস্টাল ও প্রযুক্তি' : 'Nature, crystals and technology'}</small></span></button>
           {selected && <>
@@ -185,13 +204,20 @@ function App() {
       <button className="harmony" onClick={() => setEcosystemOpen(true)}><i />{ecosystem.stability}% · {store.language==='bn'?(ecosystem.mood==='harmonious'?'সুরেলা ভারসাম্য':ecosystem.mood==='growing'?'বিকাশমান':'শান্ত'):(ecosystem.mood==='harmonious'?'HARMONIOUS':ecosystem.mood==='growing'?'GROWING':'QUIET')}</button>
     </footer>
 
-    {relaxMode && <div className="relax-overlay"><div><strong>{primaryName}</strong><small>{store.environment.mode === 'day' ? t.day : t.night} · {store.entities.length} artifacts</small></div><a href="https://github.com/tbahsan" target="_blank" rel="noreferrer">by tbahsan</a><button onClick={exitRelax}><Minimize2 />{store.language === 'bn' ? 'বের হন' : 'Exit'}</button></div>}
+    {relaxMode && <div className="relax-overlay"><div><strong>{primaryName}</strong><small>{store.environment.mode === 'day' ? t.day : t.night} · {store.entities.length} artifacts</small></div><a href="https://github.com/tbahsan" target="_blank" rel="noreferrer">by tbahsan</a><span className="relax-controls"><button className={cinematic?'active':''} onClick={()=>setCinematic(value=>!value)}><Camera/>{store.language==='bn'?'সিনেমাটিক':'Cinematic'}</button><button onClick={exitRelax}><Minimize2 />{store.language === 'bn' ? 'বের হন' : 'Exit'}</button></span></div>}
     {ecosystemOpen && <div className="dashboard-backdrop" onMouseDown={event => { if(event.target===event.currentTarget)setEcosystemOpen(false) }}><section className="ecosystem-dashboard">
       <header><div><small>LIVING SYSTEM</small><h2>{store.language==='bn'?'কাচমহল পর্যবেক্ষণ':'Habitat Observatory'}</h2></div><button onClick={() => setEcosystemOpen(false)}><X /></button></header>
       <nav><button className={ecosystemTab==='status'?'active':''} onClick={()=>setEcosystemTab('status')}><Activity />{store.language==='bn'?'অবস্থা':'Status'}</button><button className={ecosystemTab==='codex'?'active':''} onClick={()=>setEcosystemTab('codex')}><BookOpen />Codex</button><button className={ecosystemTab==='achievements'?'active':''} onClick={()=>setEcosystemTab('achievements')}><Trophy />{store.language==='bn'?'অর্জন':'Achievements'}</button></nav>
       {ecosystemTab==='status' && <div className="dashboard-content"><div className="stability-hero"><div style={{'--stability':`${ecosystem.stability*3.6}deg`} as React.CSSProperties}><strong>{ecosystem.stability}%</strong><small>STABILITY</small></div><span><b>{ecosystem.mood.toUpperCase()}</b><small>{store.language==='bn'?'কঠিন failure নেই—পরামর্শ অনুসরণ করে ভারসাম্য উন্নত করুন।':'There is no hard failure—follow gentle suggestions to improve balance.'}</small></span></div><div className="dashboard-meters"><Meter label={t.oxygen} value={stats.oxygen} color="#65ffd1"/><Meter label={t.power} value={stats.power} color="#65c7ff"/><Meter label={t.humidity} value={stats.humidity} color="#c27bff"/></div><h3>{store.language==='bn'?'আবিষ্কৃত Synergy':'Discovered synergies'}</h3><div className="synergy-list">{ecosystem.synergies.length?ecosystem.synergies.map(item=><div key={item.id}><Sparkles/><span><b>{store.language==='bn'?item.bn:item.en}</b><small>{item.bonus}</small></span></div>):<p>{store.language==='bn'?'সম্পর্কিত object একসঙ্গে রাখলে synergy আবিষ্কার হবে।':'Combine related artifacts to discover synergies.'}</p>}</div><h3>{store.language==='bn'?'কোমল পরামর্শ':'Gentle suggestion'}</h3><p className="recommendation">{ecosystem.recommendations[0][store.language]}</p></div>}
       {ecosystemTab==='codex' && <div className="dashboard-content codex-grid">{objectCatalog.map(item=><article key={item.type} className={discoveredTypes.has(item.type)?'discovered':'undiscovered'}><div><Sparkles/></div><small>{item.category}</small><h3>{discoveredTypes.has(item.type)?item.name[store.language]:'???'}</h3><p>{discoveredTypes.has(item.type)?item.description[store.language]:(store.language==='bn'?'Dome-এ object-এর সঙ্গে interact করে আবিষ্কার করুন।':'Interact with this artifact in the dome to discover it.')}</p></article>)}</div>}
       {ecosystemTab==='achievements' && <div className="dashboard-content achievement-grid">{Object.entries(achievementCatalog).map(([id,item])=><article key={id} className={achievements.includes(id)?'earned':''}><Trophy/><div><h3>{store.language==='bn'?item.bn:item.en}</h3><p>{store.language==='bn'?item.detailBn:item.detailEn}</p></div><span>{achievements.includes(id)?'✓':'○'}</span></article>)}</div>}
+    </section></div>}
+    {zenOpen && <div className="dashboard-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setZenOpen(false)}}><section className="zen-studio">
+      <header><div><small>ZEN & FOCUS</small><h2>{store.language==='bn'?'শান্তির কন্ট্রোল রুম':'Calm Control Room'}</h2></div><button onClick={()=>setZenOpen(false)}><X/></button></header>
+      <div className="zen-grid"><section><h3><Headphones/>{store.language==='bn'?'প্রসিডিউরাল শব্দ':'Procedural ambience'}</h3><button className={`audio-master ${audioOn?'active':''}`} onClick={toggleAudio}>{audioOn?<Pause/>:<Play/>}<span><b>{audioOn?(store.language==='bn'?'শব্দ চলছে':'Ambience playing'):(store.language==='bn'?'শব্দ চালু করুন':'Start ambience')}</b><small>No external audio files</small></span></button>{(['rain','wind','hum','chime'] as const).map(name=><label className="audio-slider" key={name}><span>{name}</span><input type="range" min="0" max="0.5" step="0.01" value={audioLevels[name]} onChange={event=>changeAudio(name,Number(event.target.value))}/><b>{Math.round(audioLevels[name]*200)}%</b></label>)}</section>
+      <section><h3><Timer/>{store.language==='bn'?'ফোকাস গার্ডেন':'Focus garden'}</h3><div className="focus-clock"><strong>{String(Math.floor(focusSeconds/60)).padStart(2,'0')}:{String(focusSeconds%60).padStart(2,'0')}</strong><small>{focusRunning?'FOCUSING':'READY'}</small></div><div className="focus-presets">{[5,25,50].map(minutes=><button className={focusLength===minutes?'active':''} onClick={()=>selectFocus(minutes)} key={minutes}>{minutes}m</button>)}</div><button className="focus-toggle" onClick={()=>setFocusRunning(value=>!value)}>{focusRunning?<Pause/>:<Play/>}{focusRunning?(store.language==='bn'?'বিরতি':'Pause'):(store.language==='bn'?'শুরু':'Start focus')}</button><p>{store.language==='bn'?'Session শেষ হলে dome-এ নতুন ফুল বা মাশরুম ফুটবে।':'A flower or mushroom blooms when the session ends.'}</p></section>
+      <section><h3><Heart/>{store.language==='bn'?'শ্বাস ও চলন':'Breathing & motion'}</h3><button className="breathing-start" onClick={()=>{setBreathing(true);setZenOpen(false)}}><Wind/><span><b>4 · 4 · 6</b><small>{store.language==='bn'?'শ্বাসের নির্দেশনা':'Guided breathing'}</small></span></button><label className="toggle wide"><span>{store.language==='bn'?'কম চলন':'Reduced motion'}</span><input type="checkbox" checked={reducedMotion} onChange={event=>setReducedMotion(event.target.checked)}/><i/></label><label className="toggle wide"><span>{store.language==='bn'?'সিনেমাটিক ট্যুর':'Cinematic tour'}</span><input type="checkbox" checked={cinematic} onChange={event=>setCinematic(event.target.checked)}/><i/></label></section>
+      <section><h3><Image/>{store.language==='bn'?'ওয়ালপেপার':'Wallpaper studio'}</h3><div className="wallpaper-grid"><button onClick={()=>downloadWallpaper(1920,1080,'desktop-hd')}>Desktop<small>1920 × 1080</small></button><button onClick={()=>downloadWallpaper(1440,2560,'mobile')}>Mobile<small>1440 × 2560</small></button><button onClick={()=>downloadWallpaper(2048,2048,'square')}>Square<small>2048 × 2048</small></button><button onClick={takePhoto}>Viewport<small>Current size</small></button></div></section></div>
     </section></div>}
     {projectOpen && <div className="dashboard-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setProjectOpen(false)}}><section className="project-manager">
       <header><div><small>LOCAL WORKSPACE</small><h2>{store.language==='bn'?'আমার কাচমহল':'My Projects'}</h2></div><button onClick={()=>setProjectOpen(false)}><X/></button></header>
@@ -205,6 +231,7 @@ function App() {
       <div className="creative-section"><h3><Camera/>{store.language==='bn'?'ক্যামেরা':'Camera presets'}</h3><div className="preset-row">{['front','top','isometric','interior','underside'].map(name=><button key={name} onClick={()=>chooseCamera(name)}>{name}</button>)}</div></div>
       <div className="creative-section"><h3><WandSparkles/>{store.language==='bn'?'প্রসিডিউরাল জেনারেটর':'Procedural generator'}</h3><p>{store.language==='bn'?'বর্তমান scene বদলে নতুন seed-ভিত্তিক arrangement তৈরি করবে।':'Replaces the current scene with a fresh generated arrangement.'}</p><div className="generator-row"><button onClick={()=>{store.generateScene('balanced');setCreativeOpen(false)}}>Balanced Habitat</button><button onClick={()=>{store.generateScene('garden');setCreativeOpen(false)}}>Lumen Garden</button><button onClick={()=>{store.generateScene('cosmic');setCreativeOpen(false)}}>Cosmic Machine</button></div></div>
     </section></div>}
+    {breathing && <div className="breathing-overlay"><button onClick={()=>setBreathing(false)}><X/></button><div className={`breath-orb ${breathPhase}`}><span>{breathPhase==='inhale'?(store.language==='bn'?'শ্বাস নিন':'Breathe in'):breathPhase==='hold'?(store.language==='bn'?'ধরে রাখুন':'Hold'):(store.language==='bn'?'শ্বাস ছাড়ুন':'Breathe out')}</span></div><small>4 · 4 · 6</small></div>}
     {homeOpen && <div className="home-hub">
       <div className="home-glow" /><div className="home-content">
         <div className="home-brand"><div className="orb"><Sparkles /></div><small>{alternateName}</small><h1>{primaryName}</h1><p>{store.language === 'bn' ? 'আপনার নিজস্ব জীবন্ত কাচের জগৎ গড়ে তুলুন' : 'Create your own living world of glass and light'}</p></div>

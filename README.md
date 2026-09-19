@@ -16,7 +16,7 @@
 
 Kachmohol 2099 is a browser-based creative sandbox where you shape a luminous biodome with synthetic flora, neon crystals, and anti-gravity technology. It runs entirely in your browser and requires no account or server.
 
-### Version 8 — Creative Workspace
+### Version 9 — Zen & Productivity
 
 - Premium transmissive glass biodome with adaptive solarpunk day and bioluminescent night
 - Cinematic bloom, vignette, contact shadows, layered habitat, foliage, particles, and PBR materials
@@ -43,6 +43,13 @@ Kachmohol 2099 is a browser-based creative sandbox where you shape a luminous bi
 - Group-aware dragging, multi-delete, and multi-duplicate
 - Mirror, radial ×6, and organic scatter pattern tools
 - Front, top, isometric, interior, and underside camera presets
+- Procedural Web Audio mixer with rain, wind, station hum, and crystal chimes
+- Independent ambience volume controls with no bundled audio assets
+- 5, 25, and 50-minute focus sessions with living scene rewards
+- 4–4–6 full-screen breathing guide
+- Cinematic multi-elevation camera tour in Relax Mode
+- Desktop, mobile, square, and viewport wallpaper exports
+- Reduced-motion control covering camera, particles, float, clouds, and galaxy
 - Balanced Habitat, Lumen Garden, and Cosmic Machine procedural generators
 - Ten-entry discovery Codex revealed through object interactions
 - Six persistent local achievements and gentle ambient events
