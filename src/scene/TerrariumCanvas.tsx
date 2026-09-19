@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { ContactShadows, Float, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
+import { Billboard, ContactShadows, Float, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls, useGLTF } from '@react-three/drei'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -16,7 +16,9 @@ function Mushroom({ color }: { color: string }) {
 }
 
 function Crystal({ color }: { color: string }) {
+  const {nodes}=useGLTF(`${import.meta.env.BASE_URL}assets/models/props.glb`) as any
   return <group>
+    <mesh geometry={(nodes['rock-a'] as THREE.Mesh).geometry} position={[0,-.08,0]} scale={[.72,.24,.72]} castShadow><meshPhysicalMaterial color="#172c3d" roughness={.42} metalness={.46} clearcoat={.32}/></mesh>
     <mesh position={[0, .46, 0]} rotation={[0, .15, -.05]} castShadow><coneGeometry args={[.3, 1.05, 7]} /><meshPhysicalMaterial color={color} emissive={color} emissiveIntensity={1.9} roughness={.08} metalness={.18} transmission={.18} thickness={.5} clearcoat={1} /></mesh>
     <mesh position={[.3, .27, .06]} scale={[.68, .72, .68]} rotation={[0, .32, .22]} castShadow><coneGeometry args={[.28, .88, 7]} /><meshPhysicalMaterial color="#d374ff" emissive="#a23aff" emissiveIntensity={1.45} roughness={.1} clearcoat={1} /></mesh>
     <mesh position={[-.24, .21, .04]} scale={[.48, .58, .48]} rotation={[0, -.2, -.18]}><coneGeometry args={[.26, .78, 7]} /><meshPhysicalMaterial color="#77ffd8" emissive="#38d6b3" emissiveIntensity={1.3} /></mesh>
@@ -26,7 +28,8 @@ function Crystal({ color }: { color: string }) {
 }
 
 function Bonsai({ color }: { color: string }) {
-  return <group><mesh position={[0,.35,0]} rotation={[0,0,-.12]} castShadow><cylinderGeometry args={[.09,.16,.72,18]} /><meshStandardMaterial color="#704837" roughness={.78} /></mesh>{[[-.35,.62,0],[.1,.82,0],[.38,.58,.04],[-.08,.52,.15]].map((p,i)=><mesh key={i} position={p as [number,number,number]} scale={[1.25,.72,1]} castShadow><sphereGeometry args={[.3,24,16]} /><meshPhysicalMaterial color={color} emissive={color} emissiveIntensity={.42} roughness={.52} clearcoat={.3} /></mesh>)}<mesh position={[0,.02,0]}><cylinderGeometry args={[.46,.38,.16,32]} /><meshStandardMaterial color="#1d3040" metalness={.7} roughness={.25} /></mesh></group>
+  const {nodes}=useGLTF(`${import.meta.env.BASE_URL}assets/models/nature.glb`) as any
+  return <group scale={.72}><mesh geometry={(nodes.tree_oak_trunk as THREE.Mesh).geometry} castShadow><meshPhysicalMaterial color="#704a34" roughness={.76} normalScale={[.4,.4]} /></mesh><mesh geometry={(nodes.tree_oak_canopy as THREE.Mesh).geometry} castShadow><meshPhysicalMaterial color={color} emissive={color} emissiveIntensity={.26} roughness={.52} clearcoat={.24} /></mesh><mesh position={[0,-.05,0]} scale={[1.5,.65,1.5]}><cylinderGeometry args={[.38,.31,.28,40]} /><meshPhysicalMaterial color="#142936" metalness={.72} roughness={.22} clearcoat={.6} /></mesh><mesh position={[0,.55,.15]}><sphereGeometry args={[.055,18,12]} /><meshBasicMaterial color="#efffff" toneMapped={false}/></mesh></group>
 }
 function Coral({ color }: { color: string }) {
   return <group>{[[-.25,.35,.1,-.25],[0,.48,0,.06],[.28,.32,-.05,.28],[-.05,.26,.2,-.5]].map((v,i)=><group key={i} position={[v[0],.05,v[2]]} rotation={[0,0,v[3]]}><mesh position={[0,v[1]/2,0]}><cylinderGeometry args={[.055,.1,v[1],14]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.1} roughness={.48} /></mesh><mesh position={[0,v[1],0]}><sphereGeometry args={[.11,16,12]} /><meshBasicMaterial color="#ffc4db" /></mesh></group>)}<mesh><cylinderGeometry args={[.5,.58,.1,32]} /><meshStandardMaterial color="#17313c" /></mesh></group>
@@ -89,9 +92,10 @@ function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
   }
   const group = <group ref={ref} position={entity.position} rotation={entity.rotation} scale={entity.scale}
     onClick={event => { event.stopPropagation(); select(entity.id,event.shiftKey) }}
+    onDoubleClick={event=>{event.stopPropagation();select(entity.id);window.dispatchEvent(new Event('kachmohol-focus-object'))}}
     onPointerDown={event => {
       if (advanced || entity.locked) return
-      event.stopPropagation(); if(event.shiftKey){select(entity.id,true);return} select(entity.id); dragging.current = true
+      event.stopPropagation(); if(event.shiftKey)return; select(entity.id); dragging.current = true
       ;(event.target as Element).setPointerCapture?.(event.pointerId)
       document.body.classList.add('dragging-artifact')
     }}
@@ -113,13 +117,20 @@ function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
     update(entity.id, { position: object.position.toArray() as [number, number, number], rotation: [object.rotation.x, object.rotation.y, object.rotation.z], scale: object.scale.toArray() as [number, number, number] })
   }}>{group}</TransformControls>
 }
+function CloudDome({ reducedMotion }: { reducedMotion:boolean }) {
+  const material=useRef<THREE.ShaderMaterial>(null)
+  useFrame((state)=>{if(material.current&&!reducedMotion)material.current.uniforms.uTime.value=state.clock.elapsedTime})
+  return <mesh scale={31}><sphereGeometry args={[1,64,32]} /><shaderMaterial ref={material} side={THREE.BackSide} transparent depthWrite={false} uniforms={{uTime:{value:0}}} vertexShader={`varying vec3 vDir;void main(){vDir=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`varying vec3 vDir;uniform float uTime;float hash(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}float fbm(vec3 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p*=2.03;a*=.5;}return v;}void main(){vec3 d=normalize(vDir);vec3 flow=vec3(uTime*.006,0.,uTime*.003);float n=fbm(d*3.5+flow);float horizon=1.-smoothstep(.05,.72,abs(d.y-.18));float cloud=smoothstep(.48,.72,n)*horizon;vec3 color=mix(vec3(.82,.91,.94),vec3(1.),smoothstep(.5,.82,n));gl_FragColor=vec4(color,cloud*.52);}`} /></mesh>
+}
+
 function DaySky({ reducedMotion }: { reducedMotion: boolean }) {
   const clouds = useRef<THREE.Group>(null)
   const sun = useRef<THREE.Group>(null)
   useFrame((_, delta) => { if(reducedMotion)return; if (clouds.current) clouds.current.rotation.y += delta*.018; if(sun.current) sun.current.rotation.y-=delta*.01 })
   const cloudLocations=useMemo(()=>Array.from({length:12},(_,i)=>{const angle=i/12*Math.PI*2;const radius=13+(i%3);return [Math.cos(angle)*radius,1.5+(i%4)*1.15,Math.sin(angle)*radius] as [number,number,number]}),[])
   return <>
-    <mesh scale={38}><sphereGeometry args={[1,48,24]} /><shaderMaterial side={THREE.BackSide} depthWrite={false} vertexShader={`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`varying vec3 vPos; void main(){float h=normalize(vPos).y*.5+.5;vec3 low=vec3(.68,.88,.91);vec3 mid=vec3(.28,.66,.79);vec3 high=vec3(.08,.30,.56);vec3 c=mix(low,mid,smoothstep(.12,.62,h));c=mix(c,high,smoothstep(.62,1.0,h));gl_FragColor=vec4(c,1.0);}`} /></mesh>
+    <mesh scale={38}><sphereGeometry args={[1,64,32]} /><shaderMaterial side={THREE.BackSide} depthWrite={false} vertexShader={`varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`varying vec3 vPos; void main(){float h=normalize(vPos).y*.5+.5;vec3 low=vec3(.68,.88,.91);vec3 mid=vec3(.28,.66,.79);vec3 high=vec3(.08,.30,.56);vec3 c=mix(low,mid,smoothstep(.12,.62,h));c=mix(c,high,smoothstep(.62,1.0,h));gl_FragColor=vec4(c,1.0);}`} /></mesh>
+    <CloudDome reducedMotion={reducedMotion} />
     <group ref={sun}><group position={[-12,8,-16]}><mesh><sphereGeometry args={[.85,32,32]} /><meshBasicMaterial color="#fff1a3" toneMapped={false} /></mesh><pointLight color="#ffd98c" intensity={30} distance={38} /></group></group>
     <group ref={clouds}>{cloudLocations.map((location,index)=><group key={index} position={location} scale={.72+(index%3)*.26}>
       {[[-.8,0,0],[-.25,.22,0],[.35,.12,0],[.8,-.05,0]].map((position,i)=><mesh key={i} position={position as [number,number,number]}><sphereGeometry args={[.62+i%2*.18,24,16]} /><meshStandardMaterial color="#f7ffff" transparent opacity={.72} roughness={1} depthWrite={false} /></mesh>)}
@@ -175,9 +186,21 @@ function PlacementSurface({ type, onPlace }: { type: EntityType; onPlace: (posit
   </>
 }
 
-function CameraDirector({ preset }: { preset: string }) {
+type IdentityView={name:string;style:'orbit'|'glass'|'gold'|'minimal';color:string;visible:boolean}
+function NamePlaque({ identity, reducedMotion }: { identity:IdentityView; reducedMotion:boolean }) {
+  const texture=useMemo(()=>{if(!identity.name)return null;const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=256;const context=canvas.getContext('2d')!;context.clearRect(0,0,1024,256);const accent=identity.style==='gold'?'#ffd977':identity.color;const gradient=context.createLinearGradient(0,0,1024,0);gradient.addColorStop(0,'rgba(3,12,23,.18)');gradient.addColorStop(.5,'rgba(9,28,45,.86)');gradient.addColorStop(1,'rgba(3,12,23,.18)');context.fillStyle=gradient;context.beginPath();context.roundRect(18,24,988,208,38);context.fill();context.strokeStyle=accent;context.lineWidth=4;context.globalAlpha=.72;context.stroke();context.globalAlpha=1;context.shadowColor=accent;context.shadowBlur=identity.style==='minimal'?4:24;context.fillStyle=identity.style==='gold'?'#fff0bd':'#edffff';context.textAlign='center';context.textBaseline='middle';context.font=identity.style==='gold'?'600 70px Georgia, serif':identity.style==='glass'?'300 66px Arial, sans-serif':'700 68px Arial, sans-serif';context.fillText(identity.name.slice(0,28),512,119);context.shadowBlur=8;context.fillStyle=accent;context.font='500 22px Arial, sans-serif';context.letterSpacing='8px';context.fillText('SANCTUARY  ·  2099',512,187);const result=new THREE.CanvasTexture(canvas);result.colorSpace=THREE.SRGBColorSpace;result.needsUpdate=true;return result},[identity.name,identity.style,identity.color])
+  useEffect(()=>()=>texture?.dispose(),[texture]);if(!texture||!identity.visible)return null
+  return <Billboard position={[0,-1.12,2.28]} follow><Float speed={reducedMotion?0:.65} floatIntensity={reducedMotion?0:.05} rotationIntensity={0}><mesh scale={[2.25,.56,1]}><planeGeometry args={[1,1]} /><meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} /></mesh></Float></Billboard>
+}
+function NavigationController({ command, controls }: { command:string; controls:React.RefObject<any> }) {
+  const {camera}=useThree();const selectedId=useKachmoholStore(state=>state.selectedId);const entities=useKachmoholStore(state=>state.entities)
+  useEffect(()=>{const action=command.split(':')[0];const control=controls.current;const currentTarget=control?.target?.clone?.()??new THREE.Vector3(0,-.35,0);let target=currentTarget;if(action==='focus'){const entity=entities.find(item=>item.id===selectedId);if(!entity)return;target=new THREE.Vector3(...entity.position);if(control)control.target.copy(target)}if(action==='reset'){target=new THREE.Vector3(0,-.35,0);if(control)control.target.copy(target);camera.position.set(0,.8,7.9)}else if(action==='in'||action==='out'||action==='focus'){const direction=camera.position.clone().sub(target).normalize();const current=camera.position.distanceTo(target);const desired=action==='focus'?2.8:THREE.MathUtils.clamp(current*(action==='in'?.72:1.38),2.2,20);camera.position.copy(target.clone().add(direction.multiplyScalar(desired)))}camera.lookAt(target);camera.updateProjectionMatrix();control?.update?.()},[command,camera,controls,selectedId,entities])
+  return null
+}
+
+function CameraDirector({ preset, controls }: { preset: string; controls:React.RefObject<any> }) {
   const { camera } = useThree()
-  useEffect(() => { const name=preset.split(':')[0];const positions:Record<string,[number,number,number]>={front:[0,.8,7.9],top:[0,8,.01],isometric:[5,4.2,5],interior:[0,.1,4.4],underside:[0,-6.5,3.2]};const position=positions[name];if(position){camera.position.set(...position);camera.lookAt(0,-.35,0);camera.updateProjectionMatrix()} },[preset,camera])
+  useEffect(() => { const name=preset.split(':')[0];const positions:Record<string,[number,number,number]>={front:[0,.8,7.9],top:[0,8,.01],isometric:[5,4.2,5],interior:[0,.1,4.4],underside:[0,-6.5,3.2]};const position=positions[name];if(position){camera.position.set(...position);camera.lookAt(0,-.35,0);camera.updateProjectionMatrix();if(controls.current){controls.current.target.set(0,-.35,0);controls.current.update()}} },[preset,camera,controls])
   return null
 }
 
@@ -187,13 +210,15 @@ function CinematicCamera({ active, reducedMotion }: { active: boolean; reducedMo
   return null
 }
 
-function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset, cinematic, reducedMotion }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string; cinematic: boolean; reducedMotion: boolean }) {
+function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset, cinematic, reducedMotion, zoomCommand, identity }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string; cinematic: boolean; reducedMotion: boolean; zoomCommand:string; identity:IdentityView }) {
+  const controls=useRef<any>(null)
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
   const isDay = env.mode === 'day'
   return <>
-    <CameraDirector preset={cameraPreset} />
+    <CameraDirector preset={cameraPreset} controls={controls} />
+    <NavigationController command={zoomCommand} controls={controls} />
     <CinematicCamera active={cinematic} reducedMotion={reducedMotion} />
     <color attach="background" args={[isDay ? '#6f98a1' : '#01040b']} />
     <fog attach="fog" args={[isDay ? '#5d9bb2' : '#030713', isDay ? 28 : 14, isDay ? 70 : 44]} />
@@ -208,16 +233,20 @@ function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset,
       <mesh><sphereGeometry args={[3.55, 96, 64]} /><MeshTransmissionMaterial backside color={isDay?'#d9fff0':env.auraColor} transmission={.96} thickness={.18} roughness={.08} chromaticAberration={.025} anisotropy={.1} distortion={.04} distortionScale={.16} temporalDistortion={.02} transparent opacity={.25} /></mesh>
       <mesh rotation={[0,0,.02]}><torusGeometry args={[3.52,.018,12,160]} /><meshBasicMaterial color={env.auraColor} transparent opacity={.72} toneMapped={false} /></mesh>
       <Habitat isDay={isDay} aura={env.auraColor} />
+      <NamePlaque identity={identity} reducedMotion={reducedMotion} />
       {pendingType && <PlacementSurface type={pendingType} onPlace={onPlace} />}
       {entities.map(entity => env.float && ['core','waterOrb','jellyfish','droneBee'].includes(entity.type) ? <Float key={entity.id} speed={reducedMotion?0:1.05} rotationIntensity={reducedMotion?0:.05} floatIntensity={reducedMotion?0:.18}><Artifact entity={entity} advanced={advanced} /></Float> : <Artifact key={entity.id} entity={entity} advanced={advanced} />)}
     </group>
-    <OrbitControls makeDefault enabled={!cinematic} enableDamping dampingFactor={.055} minDistance={5.8} maxDistance={9.2} maxPolarAngle={Math.PI-.06} minPolarAngle={.06} autoRotate={relax&&!reducedMotion&&!cinematic} autoRotateSpeed={.38} enablePan={false} />
+    <OrbitControls ref={controls} makeDefault enabled={!cinematic} enableDamping dampingFactor={.055} minDistance={2.2} maxDistance={20} maxPolarAngle={Math.PI-.06} minPolarAngle={.06} autoRotate={relax&&!reducedMotion&&!cinematic} autoRotateSpeed={.38} enablePan={false} />
     <EffectComposer multisampling={0}><Bloom mipmapBlur intensity={isDay?.45:1.25} luminanceThreshold={isDay?.92:.48} radius={.72} /><Vignette eskil={false} offset={.18} darkness={isDay?.35:.66} /></EffectComposer>
   </>
 }
 
-export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability, cameraPreset, cinematic, reducedMotion }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string; cinematic: boolean; reducedMotion: boolean }) {
+export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability, cameraPreset, cinematic, reducedMotion, zoomCommand, identity }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string; cinematic: boolean; reducedMotion: boolean; zoomCommand:string; identity:IdentityView }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} cameraPreset={cameraPreset} cinematic={cinematic} reducedMotion={reducedMotion} /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} cameraPreset={cameraPreset} cinematic={cinematic} reducedMotion={reducedMotion} zoomCommand={zoomCommand} identity={identity} /></Suspense>
   </Canvas>
 }
+
+useGLTF.preload(`${import.meta.env.BASE_URL}assets/models/nature.glb`)
+useGLTF.preload(`${import.meta.env.BASE_URL}assets/models/props.glb`)

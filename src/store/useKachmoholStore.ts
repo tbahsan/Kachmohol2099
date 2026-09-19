@@ -30,7 +30,7 @@ export const useKachmoholStore=create<Store>((set,get)=>{
   const checkpoint=()=>set(state=>({past:[...state.past.slice(-49),copySnapshot({entities:state.entities,environment:state.environment})],future:[],saveState:'saving'}))
   const setSelection=(ids:string[])=>set({selectedIds:ids,selectedId:ids.at(-1)??null})
   return {
-    schemaVersion:1,appVersion:'1.0.0',projectMeta:newMeta('Neon Eden'),environment:{mode:'night',auraColor:'#4defff',float:true},entities:initialEntities,
+    schemaVersion:1,appVersion:'1.1.0',projectMeta:newMeta('Neon Eden'),environment:{mode:'night',auraColor:'#4defff',float:true},entities:initialEntities,
     language:(localStorage.getItem('kachmohol-language') as Language)||'bn',selectedId:null,selectedIds:[],transformMode:'translate',past:[],future:[],saveState:'saved',
     setLanguage:language=>{localStorage.setItem('kachmohol-language',language);set({language})},
     select:(id,multi=false)=>{if(!id)return setSelection([]);const current=get().selectedIds;if(multi)setSelection(current.includes(id)?current.filter(item=>item!==id):[...current,id]);else setSelection([id])},
