@@ -1,4 +1,4 @@
-import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Float, MeshTransmissionMaterial, OrbitControls, Sparkles, Stars, TransformControls } from '@react-three/drei'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
@@ -74,6 +74,7 @@ function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
   useEffect(() => { if ((entity.interactionCount ?? 0) > 0) reaction.current = 1 }, [entity.interactionCount])
   useFrame((_,delta) => { if (!reactionGroup.current || reaction.current <= 0) return; reaction.current=Math.max(0,reaction.current-delta*.72); const pulse=1+Math.sin((1-reaction.current)*Math.PI*7)*reaction.current*.16; reactionGroup.current.scale.setScalar(pulse) })
   const selectedId = useKachmoholStore(state => state.selectedId)
+  const selectedIds = useKachmoholStore(state => state.selectedIds)
   const mode = useKachmoholStore(state => state.transformMode)
   const select = useKachmoholStore(state => state.select)
   const update = useKachmoholStore(state => state.updateEntity)
@@ -87,10 +88,10 @@ function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
     update(entity.id, { position: object.position.toArray() as [number, number, number] })
   }
   const group = <group ref={ref} position={entity.position} rotation={entity.rotation} scale={entity.scale}
-    onClick={event => { event.stopPropagation(); select(entity.id) }}
+    onClick={event => { event.stopPropagation(); select(entity.id,event.shiftKey) }}
     onPointerDown={event => {
       if (advanced || entity.locked) return
-      event.stopPropagation(); select(entity.id); dragging.current = true
+      event.stopPropagation(); if(event.shiftKey){select(entity.id,true);return} select(entity.id); dragging.current = true
       ;(event.target as Element).setPointerCapture?.(event.pointerId)
       document.body.classList.add('dragging-artifact')
     }}
@@ -104,7 +105,7 @@ function Artifact({ entity, advanced }: { entity: Entity; advanced: boolean }) {
     }}
     onPointerUp={event => { document.body.classList.remove('dragging-artifact'); finishDrag(event) }}>
     <group ref={reactionGroup}>{visual}</group>
-    {selectedId === entity.id && <mesh position={[0,.35,0]}><sphereGeometry args={[.82, 32, 20]} /><meshBasicMaterial color="#9bf8ff" transparent opacity={.035} depthWrite={false} /></mesh>}
+    {selectedIds.includes(entity.id) && <mesh position={[0,.35,0]}><sphereGeometry args={[.82, 32, 20]} /><meshBasicMaterial color="#9bf8ff" transparent opacity={.035} depthWrite={false} /></mesh>}
   </group>
   if (!advanced || selectedId !== entity.id || entity.locked) return group
   return <TransformControls mode={mode} size={.65} onMouseUp={() => {
@@ -174,12 +175,19 @@ function PlacementSurface({ type, onPlace }: { type: EntityType; onPlace: (posit
   </>
 }
 
-function World({ pendingType, onPlace, advanced, relax, stability }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number }) {
+function CameraDirector({ preset }: { preset: string }) {
+  const { camera } = useThree()
+  useEffect(() => { const name=preset.split(':')[0];const positions:Record<string,[number,number,number]>={front:[0,.8,7.9],top:[0,8,.01],isometric:[5,4.2,5],interior:[0,.1,4.4],underside:[0,-6.5,3.2]};const position=positions[name];if(position){camera.position.set(...position);camera.lookAt(0,-.35,0);camera.updateProjectionMatrix()} },[preset,camera])
+  return null
+}
+
+function World({ pendingType, onPlace, advanced, relax, stability, cameraPreset }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string }) {
   const entities = useKachmoholStore(s => s.entities)
   const env = useKachmoholStore(s => s.environment)
   const select = useKachmoholStore(s => s.select)
   const isDay = env.mode === 'day'
   return <>
+    <CameraDirector preset={cameraPreset} />
     <color attach="background" args={[isDay ? '#6f98a1' : '#01040b']} />
     <fog attach="fog" args={[isDay ? '#5d9bb2' : '#030713', isDay ? 28 : 14, isDay ? 70 : 44]} />
     <ambientLight intensity={(isDay ? 1.4 : .32) * (.72 + stability/360)} />
@@ -201,8 +209,8 @@ function World({ pendingType, onPlace, advanced, relax, stability }: { pendingTy
   </>
 }
 
-export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number }) {
+export function TerrariumCanvas({ pendingType, onPlace, advanced, relax, stability, cameraPreset }: { pendingType: EntityType | null; onPlace: (position: Vec3) => void; advanced: boolean; relax: boolean; stability: number; cameraPreset: string }) {
   return <Canvas id="terrarium-canvas" shadows gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, .8, 7.9], fov: 42 }} dpr={[1, 1.65]}>
-    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} /></Suspense>
+    <Suspense fallback={null}><World pendingType={pendingType} onPlace={onPlace} advanced={advanced} relax={relax} stability={stability} cameraPreset={cameraPreset} /></Suspense>
   </Canvas>
 }
